@@ -281,16 +281,23 @@ def select_file(request):
         
         if not file_id:
             return JsonResponse({'error': 'File ID is required'}, status=400)
-            
+        
+        # Get the file info
         file_info = FileInfo.objects.get(id=file_id)
         
-        # Update global active file
-        global active_file_id
-        active_file_id = file_id
+        # Deactivate all other files
+        FileInfo.objects.all().update(is_active=False)
         
-        # Get sample entry to get columns
-        sample_entry = DataEntry.objects.filter(file=file_info).first()
-        columns = list(sample_entry.data.keys()) if sample_entry else []
+        # Activate the selected file
+        file_info.is_active = True
+        file_info.save()
+        
+        # Get columns from the first row
+        columns = []
+        if file_info.entries.exists():
+            first_entry = file_info.entries.first()
+            if first_entry and first_entry.data:
+                columns = list(first_entry.data.keys())
         
         return JsonResponse({
             'message': 'File selected successfully',
@@ -301,7 +308,26 @@ def select_file(request):
     except FileInfo.DoesNotExist:
         return JsonResponse({'error': 'File not found'}, status=404)
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@require_http_methods(['DELETE'])
+def delete_file(request, file_id):
+    try:
+        file_info = FileInfo.objects.get(id=file_id)
+        
+        # Delete all associated entries first
+        file_info.entries.all().delete()
+        
+        # Delete the file info
+        file_info.delete()
+        
+        return JsonResponse({'message': 'File deleted successfully'})
+        
+    except FileInfo.DoesNotExist:
+        return JsonResponse({'error': 'File not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
 
 
 @csrf_exempt
@@ -416,21 +442,20 @@ def search_data(request):
             
         file_info = FileInfo.objects.get(id=active_file_id)
 
-        # Start with base query for the current file
+        # Rest of the search logic remains the same, but filter by file
         query = Q(file=file_info)
         
-        # Add field-specific queries with OR operator
-        field_query = Q()
+        # Add field-specific queries
         for field in fields:
-            field_query |= Q(**{f"data__{field.strip()}__icontains": value})
-        
-        # Combine file query with field query using AND
-        query &= field_query
+            query &= Q(**{f"data__{field.strip()}__icontains": value})
 
-        # Perform the search
         results = DataEntry.objects.filter(query)
 
-        # Get all matching results
+        # Apply relevance ranking: prioritize matches in important fields
+        # We'll use a custom sorting approach by adding annotations
+        # For PostgreSQL, we could use more advanced features
+
+        # First get all matching results
         all_results = list(results)
 
         # Define a function to calculate relevance score
@@ -438,24 +463,33 @@ def search_data(request):
             score = 0
             search_value = value.lower()
 
-            # Check each field for matches
+            # Check priority fields first (higher score)
             for field in fields:
                 if field in entry_data and entry_data[field]:
                     field_value = str(entry_data[field]).lower()
                     
                     # Exact match gets highest score
                     if field_value == search_value:
-                        score += 100
+                        if field.lower() == 'product':
+                            score += 200  # Product exact match
+                        else:
+                            score += 150  # Company exact match
                     # Prefix match gets high score
                     elif field_value.startswith(search_value):
-                        score += 75
-                    # Contains match gets base score
+                        if field.lower() == 'product':
+                            score += 150  # Product prefix match
+                        else:
+                            score += 100  # Company prefix match
+                    # Contains match gets base priority score
                     elif search_value in field_value:
-                        score += 50
+                        if field.lower() == 'product':
+                            score += 100  # Product contains match
+                        else:
+                            score += 50   # Company contains match
 
             return score
 
-        # Sort results by relevance score
+        # Sort results by relevance score (higher first)
         sorted_results = sorted(
             all_results,
             key=lambda entry: calculate_relevance(entry.data),
@@ -469,11 +503,17 @@ def search_data(request):
         start_idx = (page - 1) * page_size
         end_idx = start_idx + page_size
         paginated_results = sorted_results[start_idx:end_idx]
-        total_pages = (total_count + page_size - 1) // page_size
+        total_pages = (total_count + page_size - 1) // page_size  # Ceiling division
 
-        # Prepare response
+        # Prepare response with additional relevance info
         response_data = {
-            'results': [entry.data for entry in paginated_results],
+            'results': [
+                {
+                    **entry.data,
+                    '_relevance': calculate_relevance(entry.data)  # Add relevance score for debugging
+                }
+                for entry in paginated_results
+            ],
             'total_count': total_count,
             'page': page,
             'total_pages': total_pages
@@ -482,7 +522,6 @@ def search_data(request):
         return JsonResponse(response_data, safe=False)
 
     except Exception as e:
-        print(f"Search error: {str(e)}")  # Log the error
         return JsonResponse({'error': str(e)}, status=400)
 
 

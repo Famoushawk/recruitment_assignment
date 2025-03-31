@@ -9,4 +9,5 @@ urlpatterns = [
     path('suggestions/', views.search_suggestions, name='search_suggestions'),
     path('files/', views.list_files, name='list_files'),
     path('files/select/', views.select_file, name='select_file'),
+    path('files/<int:file_id>/', views.delete_file, name='delete_file'),
 ]

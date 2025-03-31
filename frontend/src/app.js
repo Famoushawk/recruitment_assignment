@@ -644,6 +644,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             <button class="btn-select-file" onclick="selectFile(${file.id})">
                                 ${file.is_active ? 'Selected' : 'Select'}
                             </button>
+                            <button class="btn-delete-file" onclick="deleteFile(${file.id}, '${file.filename}')">
+                                Delete
+                            </button>
                         </div>
                     `;
 
@@ -711,8 +714,41 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Add selectFile to window object so it can be called from HTML
-    window.selectFile = selectFile;
+    // Function to delete a file
+    async function deleteFile(fileId, fileName) {
+        if (!confirm(`Are you sure you want to delete "${fileName}"?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/files/${fileId}/`, {
+                method: 'DELETE',
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to delete file');
+            }
+
+            // If the deleted file was selected, clear the search interface
+            if (fileId === selectedFileId) {
+                selectedFileId = null;
+                clearColumns();
+                resultsDiv.innerHTML = '';
+                paginationContainer.innerHTML = '';
+                document.getElementById('currentFileInfo').style.display = 'none';
+            }
+
+            // Reload the file list
+            await loadFileList();
+            showNotification('File deleted successfully', 'success');
+        } catch (error) {
+            console.error('Error deleting file:', error);
+            showNotification('Error deleting file. Please try again.', 'error');
+        }
+    }
+
+    // Add deleteFile to window object so it can be called from HTML
+    window.deleteFile = deleteFile;
 
     // Load file list when page loads
     loadFileList();
