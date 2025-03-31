@@ -22,7 +22,6 @@ export async function loadFileList() {
         }
 
         const data = await response.json();
-        console.log('Loaded files:', data); // Debug log
 
         if (!fileList) {
             console.error('File list element not found');

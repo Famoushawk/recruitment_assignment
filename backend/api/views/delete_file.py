@@ -8,10 +8,8 @@ def delete_file(request, file_id):
     try:
         file_info = FileInfo.objects.get(id=file_id)
         
-        # Delete all associated entries first
         file_info.entries.all().delete()
         
-        # Delete the file info
         file_info.delete()
         
         return JsonResponse({'message': 'File deleted successfully'})

@@ -1,13 +1,13 @@
 import csv
 import io
-import json
+
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from django.db import transaction
-from ..models import DataEntry, FileInfo
 from openpyxl import load_workbook
-from .state import upload_progress, active_file_id, reset_progress
+
+from ..models import DataEntry, FileInfo
+
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -16,7 +16,6 @@ def upload_file(request):
         file = request.FILES['file']
         file_name = file.name.lower()
         
-        # Reset progress tracker
         global upload_progress
         upload_progress = {
             'total_rows': 0,
@@ -27,13 +26,11 @@ def upload_file(request):
             'current_file': file.name
         }
         
-        # Create new FileInfo entry
         file_info = FileInfo.objects.create(
             filename=file.name,
             is_active=True
         )
         
-        # Initialize variables
         chunk_size = 1000  # Process 1000 rows at a time
         rows_to_create = []
         columns = []

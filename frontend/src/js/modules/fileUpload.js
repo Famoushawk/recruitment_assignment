@@ -68,7 +68,6 @@ async function handleFileUpload() {
 
         showNotification('File uploaded successfully', 'success');
 
-        // Hide progress after delay
         setTimeout(() => {
             progressContainer.style.display = 'none';
         }, 3000);

@@ -15,17 +15,13 @@ def select_file(request):
         if not file_id:
             return JsonResponse({'error': 'File ID is required'}, status=400)
         
-        # Get the file info
         file_info = FileInfo.objects.get(id=file_id)
         
-        # Deactivate all other files
         FileInfo.objects.all().update(is_active=False)
         
-        # Activate the selected file
         file_info.is_active = True
         file_info.save()
         
-        # Get columns from the first row
         columns = []
         if file_info.entries.exists():
             first_entry = file_info.entries.first()
