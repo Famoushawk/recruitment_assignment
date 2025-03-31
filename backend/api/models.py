@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.postgres.indexes import GinIndex
 
 class FileInfo(models.Model):
     filename = models.CharField(max_length=255)
@@ -15,4 +16,10 @@ class DataEntry(models.Model):
     file = models.ForeignKey(FileInfo, on_delete=models.CASCADE, related_name='entries', null=True, blank=True)
 
     def __str__(self):
-        return f"Entry {self.id} from {self.file.filename if self.file else 'unknown'}" 
+        return f"Entry {self.id} from {self.file.filename if self.file else 'unknown'}"
+
+    class Meta:
+        indexes = [
+            # GIN index for the entire JSON field
+            GinIndex(fields=['data'], name='data_gin_idx'),
+        ] 
