@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Search Application</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>File Search Application</h1>
+        
+        <div class="upload-section">
+            <h2>Upload File</h2>
+            <form id="uploadForm">
+                <input type="file" id="fileInput" accept=".csv,.txt">
+                <button type="submit">Upload</button>
+            </form>
+        </div>
+
+        <div class="search-section">
+            <h2>Search Data</h2>
+            <form id="searchForm">
+                <div class="form-group">
+                    <label>Select Columns to Search:</label>
+                    <div class="columns-list" id="columnsContainer">
+                        <div class="columns-header">
+                            <label class="checkbox-container">
+                                <input type="checkbox" id="selectAllColumns">
+                                <span class="checkbox-label">Select All</span>
+                            </label>
+                        </div>
+                        <div class="columns-scroll" id="searchFields">
+                            <!-- Checkboxes will be dynamically added here -->
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="searchValue">Search Value:</label>
+                    <input type="text" id="searchValue" required placeholder="Enter search term...">
+                </div>
+                <button type="submit">Search</button>
+            </form>
+        </div>
+
+        <div class="results-section">
+            <h2>Results</h2>
+            <div id="results"></div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html> 
