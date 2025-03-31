@@ -654,3 +654,67 @@ select option {
         padding: 12px 15px;
     }
 }
+
+.priority-columns {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.priority-columns h4 {
+    color: #2c3e50;
+    margin-top: 0;
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+}
+
+.regular-columns {
+    margin-top: 2rem;
+}
+
+.regular-columns h4 {
+    color: #6c757d;
+    margin-bottom: 1rem;
+    font-size: 1rem;
+}
+
+.quick-search-buttons {
+    margin: 1rem 0;
+    padding: 1rem;
+    background-color: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+}
+
+.quick-search-label {
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    color: #495057;
+}
+
+.quick-search-btn-container {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.quick-search-btn {
+    padding: 0.5rem 1rem;
+    border: 1px solid #6c757d;
+    border-radius: 4px;
+    background-color: #fff;
+    color: #495057;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.quick-search-btn:hover {
+    background-color: #f8f9fa;
+    border-color: #495057;
+}
+
+.quick-search-btn:active {
+    background-color: #e9ecef;
+}

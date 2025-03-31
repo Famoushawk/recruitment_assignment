@@ -112,10 +112,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Load columns function
     function loadColumns() {
-        // Don't automatically fetch columns on page load
-        clearColumns();
-        searchFields.innerHTML = '<div class="no-columns-message">No columns available. Please upload a CSV file.</div>';
-        selectAllCheckbox.disabled = true;
+        fetch('/api/columns/')
+            .then(response => response.json())
+            .then(data => {
+                if (data.columns && data.columns.length > 0) {
+                    updateColumnSelectionUI(data.columns);
+                } else {
+                    clearColumns();
+                    searchFields.innerHTML = '<div class="no-columns-message">No columns available. Please upload a CSV file.</div>';
+                    selectAllCheckbox.disabled = true;
+                }
+            })
+            .catch(error => {
+                console.error('Error loading columns:', error);
+                clearColumns();
+                searchFields.innerHTML = '<div class="no-columns-message">Error loading columns. Please try refreshing the page.</div>';
+                selectAllCheckbox.disabled = true;
+            });
     }
 
     // Create pagination controls

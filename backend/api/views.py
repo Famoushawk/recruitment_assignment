@@ -388,20 +388,42 @@ def search_data(request):
         # Define a function to calculate relevance score
         def calculate_relevance(entry_data):
             score = 0
+            search_value = value.lower()
 
             # Check priority fields first (higher score)
             for field in priority_fields:
-                if field in entry_data and value.lower() in str(entry_data[field]).lower():
-                    # Product gets highest priority
-                    if field.lower() == 'product':
-                        score += 100
-                    else:
-                        score += 50
+                if field in entry_data and entry_data[field]:
+                    field_value = str(entry_data[field]).lower()
+                    
+                    # Exact match gets highest score
+                    if field_value == search_value:
+                        if field.lower() == 'product':
+                            score += 200  # Product exact match
+                        else:
+                            score += 150  # Company exact match
+                    # Prefix match gets high score
+                    elif field_value.startswith(search_value):
+                        if field.lower() == 'product':
+                            score += 150  # Product prefix match
+                        else:
+                            score += 100  # Company prefix match
+                    # Contains match gets base priority score
+                    elif search_value in field_value:
+                        if field.lower() == 'product':
+                            score += 100  # Product contains match
+                        else:
+                            score += 50   # Company contains match
 
-            # Then check other fields
+            # Then check other fields (lower priority)
             for field in normal_fields:
-                if field in entry_data and value.lower() in str(entry_data[field]).lower():
-                    score += 10
+                if field in entry_data and entry_data[field]:
+                    field_value = str(entry_data[field]).lower()
+                    if field_value == search_value:
+                        score += 30  # Exact match in other fields
+                    elif field_value.startswith(search_value):
+                        score += 20  # Prefix match in other fields
+                    elif search_value in field_value:
+                        score += 10  # Contains match in other fields
 
             return score
 
