@@ -9,44 +9,46 @@
 <body>
     <div class="container">
         <h1>File Search Application</h1>
-        
-        <div class="upload-section">
+
+        <!-- Upload Section -->
+        <section class="upload-section">
             <h2>Upload File</h2>
             <form id="uploadForm">
-                <input type="file" id="fileInput" accept=".csv,.txt">
-                <button type="submit">Upload</button>
+                <input type="file" id="fileInput" accept=".csv">
+                <button type="submit" class="btn-primary">Upload</button>
             </form>
-        </div>
+        </section>
 
-        <div class="search-section">
+        <!-- Search Section -->
+        <section class="search-section">
             <h2>Search Data</h2>
             <form id="searchForm">
-                <div class="form-group">
-                    <label>Select Columns to Search:</label>
-                    <div class="columns-list" id="columnsContainer">
-                        <div class="columns-header">
-                            <label class="checkbox-container">
-                                <input type="checkbox" id="selectAllColumns">
-                                <span class="checkbox-label">Select All</span>
-                            </label>
-                        </div>
-                        <div class="columns-scroll" id="searchFields">
-                            <!-- Checkboxes will be dynamically added here -->
-                        </div>
+                <div class="columns-section">
+                    <h3>Select Columns to Search:</h3>
+                    <div class="select-all-container">
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="selectAllColumns">
+                            <span class="checkbox-label">Select All</span>
+                        </label>
+                    </div>
+                    <div class="columns-list" id="searchFields">
+                        <!-- Columns will be dynamically added here -->
                     </div>
                 </div>
-                <div class="form-group">
+                
+                <div class="search-input-section">
                     <label for="searchValue">Search Value:</label>
-                    <input type="text" id="searchValue" required placeholder="Enter search term...">
+                    <input type="text" id="searchValue" placeholder="Enter search term...">
+                    <button type="submit" class="btn-primary">Search</button>
                 </div>
-                <button type="submit">Search</button>
             </form>
-        </div>
+        </section>
 
-        <div class="results-section">
+        <!-- Results Section -->
+        <section class="results-section">
             <h2>Results</h2>
             <div id="results"></div>
-        </div>
+        </section>
     </div>
     <script src="app.js"></script>
 </body>
