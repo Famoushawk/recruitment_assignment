@@ -158,4 +158,18 @@ function handleKeyboardNavigation(e) {
     } else if (e.key === 'Escape') {
         suggestionsList.style.display = 'none';
     }
+}
+
+export async function getSuggestions(term) {
+    try {
+        const response = await fetch(`/api/suggestions/?term=${encodeURIComponent(term)}`);
+        if (!response.ok) {
+            throw new Error('Failed to fetch suggestions');
+        }
+        const data = await response.json();
+        return data.suggestions;
+    } catch (error) {
+        console.error('Error fetching suggestions:', error);
+        return [];
+    }
 } 

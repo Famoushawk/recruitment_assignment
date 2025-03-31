@@ -1,12 +1,15 @@
 import { showNotification, showErrorMessage, highlightMatches } from './ui.js';
 import { getSelectedFileId } from './fileList.js';
-import { createPagination } from './pagination.js';
+import { createPagination, updatePagination } from './pagination.js';
+import { getSuggestions } from './suggestions.js';
 
 let searchForm;
 let searchFields;
 let selectAllCheckbox;
 let resultsDiv;
 let currentSearchParams = null;
+let currentPage = 1;
+let totalPages = 0;
 
 export function initializeSearch() {
     searchForm = document.getElementById('searchForm');
@@ -25,6 +28,36 @@ export function initializeSearch() {
     if (searchForm) {
         searchForm.addEventListener('submit', handleSearchSubmit);
     }
+
+    // Handle search input changes for suggestions
+    const searchInput = document.getElementById('searchValue');
+    searchInput.addEventListener('input', async (e) => {
+        const value = e.target.value.trim();
+        if (value) {
+            const suggestions = await getSuggestions(value);
+            displaySuggestions(suggestions);
+        } else {
+            hideSuggestions();
+        }
+    });
+
+    // Close suggestions when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!searchInput.contains(e.target)) {
+            hideSuggestions();
+        }
+    });
+
+    // Handle suggestion selection
+    document.getElementById('suggestionsList').addEventListener('click', (e) => {
+        if (e.target.classList.contains('suggestion-item')) {
+            // Extract just the search term without the column info in parentheses
+            const searchTerm = e.target.textContent.replace(/\s*\([^)]*\)\s*$/, '');
+            searchInput.value = searchTerm;
+            hideSuggestions();
+            performSearch();
+        }
+    });
 }
 
 function handleSelectAll(e) {
@@ -55,40 +88,57 @@ function updateSelectAllState() {
 
 async function handleSearchSubmit(e) {
     e.preventDefault();
-
-    if (!getSelectedFileId()) {
-        showErrorMessage('Please select a file before searching.');
-        return;
-    }
-
-    const selectedFields = Array.from(document.querySelectorAll('input[name="searchFields"]:checked'))
-        .map(checkbox => checkbox.value);
-
-    if (selectedFields.length === 0) {
-        showErrorMessage('Please select at least one column to search.');
-        return;
-    }
-
-    const searchInput = document.getElementById('searchValue');
-    const searchValue = searchInput ? searchInput.value.trim() : '';
-    if (!searchValue) {
-        showErrorMessage('Please enter a search term.');
-        return;
-    }
-
-    await performSearch(selectedFields, searchValue);
+    await performSearch();
 }
 
-export async function performSearch(fields, value, page = 1) {
+export async function performSearch(page = 1) {
+    const searchValue = document.getElementById('searchValue').value.trim();
+    const searchFields = document.getElementById('searchFields');
+    const selectedFields = Array.from(searchFields.querySelectorAll('input[type="checkbox"]:checked'))
+        .map(checkbox => {
+            // Convert field names to match database columns
+            const field = checkbox.value;
+            switch(field) {
+                case 'ForeignCompany':
+                    return 'Foreign Company';
+                case 'IndianCompany':
+                    return 'Indian Company';
+                default:
+                    return field;
+            }
+        });
+
+    if (!searchValue) {
+        showNotification('Please enter a search term', 'warning');
+        return;
+    }
+
+    if (selectedFields.length === 0) {
+        showNotification('Please select at least one field to search in', 'warning');
+        return;
+    }
+
+    // Split search terms by comma and trim whitespace
+    const searchTerms = searchValue.split(',')
+        .map(term => term.trim())
+        .filter(term => term.length > 0);  // Only keep non-empty terms
+
+    if (searchTerms.length === 0) {
+        showNotification('Please enter at least one valid search term', 'warning');
+        return;
+    }
+
     try {
         if (resultsDiv) {
             resultsDiv.innerHTML = '<div class="loading">Searching...</div>';
         }
 
+        currentPage = page;  // Update current page
+
         const searchParams = {
-            fields: fields,
-            value: value,
-            page: page,
+            search_terms: searchTerms,
+            fields: selectedFields,
+            page: currentPage,
             page_size: 20,
             file_id: getSelectedFileId()
         };
@@ -111,13 +161,14 @@ export async function performSearch(fields, value, page = 1) {
         }
 
         // Store current search parameters for pagination
-        currentSearchParams = { fields, value };
+        currentSearchParams = { search_terms: searchTerms, fields: selectedFields };
 
         // Display results
         if (data.results && data.results.length > 0) {
-            displayResults(data.results, data.total_count, value);
+            displayResults(data.results, data.total_count, searchTerms);
             if (data.total_pages > 1) {
-                createPagination(data.page, data.total_pages);
+                totalPages = data.total_pages;
+                createPagination(currentPage, totalPages);
             }
         } else {
             showErrorMessage('No results found for your search.');
@@ -128,7 +179,7 @@ export async function performSearch(fields, value, page = 1) {
     }
 }
 
-function displayResults(results, totalCount, searchTerm) {
+function displayResults(results, totalCount, searchTerms) {
     if (!resultsDiv) return;
 
     // Show total count
@@ -143,22 +194,29 @@ function displayResults(results, totalCount, searchTerm) {
         const card = document.createElement('div');
         card.className = 'result-card';
 
+        // Get the actual data from the result object
+        const data = result.data || {};
+
         // Create header with key information
         const header = document.createElement('div');
         header.className = 'result-header';
 
         // Prioritize showing product and company information in the header
-        const productName = result['Product'] || '';
-        const indianCompany = result['IndianCompany'] || result['Indian Company'] || '';
-        const foreignCompany = result['ForeignCompany'] || result['Foreign Company'] || '';
+        const productName = data['Product'] || data['product'] || '';
+        const indianCompany = data['Indian Company'] || data['IndianCompany'] || '';
+        const foreignCompany = data['Foreign Company'] || data['ForeignCompany'] || '';
 
         // Create header content
         const headerContent = document.createElement('div');
         headerContent.className = 'header-content';
 
-        // Add product name with highlighting
+        // Add product name with highlighting for each search term
         const productTitle = document.createElement('h3');
-        productTitle.innerHTML = productName ? highlightMatches(productName, searchTerm) : 'No Product Name';
+        let highlightedProduct = productName;
+        searchTerms.forEach(term => {
+            highlightedProduct = highlightMatches(highlightedProduct, term);
+        });
+        productTitle.innerHTML = productName ? highlightedProduct : 'No Product Name';
         headerContent.appendChild(productTitle);
 
         // Add company information if available
@@ -169,14 +227,22 @@ function displayResults(results, totalCount, searchTerm) {
             if (indianCompany) {
                 const indianCompanyDiv = document.createElement('div');
                 indianCompanyDiv.className = 'company indian-company';
-                indianCompanyDiv.innerHTML = `<span class="company-label">Indian Company:</span> ${highlightMatches(indianCompany, searchTerm)}`;
+                let highlightedIndianCompany = indianCompany;
+                searchTerms.forEach(term => {
+                    highlightedIndianCompany = highlightMatches(highlightedIndianCompany, term);
+                });
+                indianCompanyDiv.innerHTML = `<span class="company-label">Indian Company:</span> ${highlightedIndianCompany}`;
                 companyInfo.appendChild(indianCompanyDiv);
             }
 
             if (foreignCompany) {
                 const foreignCompanyDiv = document.createElement('div');
                 foreignCompanyDiv.className = 'company foreign-company';
-                foreignCompanyDiv.innerHTML = `<span class="company-label">Foreign Company:</span> ${highlightMatches(foreignCompany, searchTerm)}`;
+                let highlightedForeignCompany = foreignCompany;
+                searchTerms.forEach(term => {
+                    highlightedForeignCompany = highlightMatches(highlightedForeignCompany, term);
+                });
+                foreignCompanyDiv.innerHTML = `<span class="company-label">Foreign Company:</span> ${highlightedForeignCompany}`;
                 companyInfo.appendChild(foreignCompanyDiv);
             }
 
@@ -184,85 +250,7 @@ function displayResults(results, totalCount, searchTerm) {
         }
 
         header.appendChild(headerContent);
-
-        // Add expand/collapse button
-        const expandButton = document.createElement('button');
-        expandButton.className = 'btn-expand';
-        expandButton.textContent = 'Details';
-        expandButton.onclick = () => {
-            const details = card.querySelector('.result-details');
-            if (details) {
-                const isExpanded = details.classList.toggle('expanded');
-                expandButton.textContent = isExpanded ? 'Hide' : 'Details';
-            }
-        };
-        header.appendChild(expandButton);
-
         card.appendChild(header);
-
-        // Create details section
-        const details = document.createElement('div');
-        details.className = 'result-details';
-
-        // Group fields by category
-        const fieldGroups = {
-            'Product Information': ['Product', 'HS Code', 'Quantity', 'Unit'],
-            'Location Information': ['City', 'Address', 'Port', 'Country'],
-            'Business Information': ['IEC', 'CUSH', 'Company', 'Invoice', 'Date'],
-            'Financial Information': ['Rate', 'Currency', 'FOB', 'Amount']
-        };
-
-        // Create field groups
-        Object.entries(fieldGroups).forEach(([groupName, fields]) => {
-            const groupFields = Object.entries(result).filter(([key]) => 
-                fields.some(field => key.toLowerCase().includes(field.toLowerCase()))
-            );
-
-            if (groupFields.length > 0) {
-                const group = document.createElement('div');
-                group.className = 'field-group';
-                group.innerHTML = `<h4>${groupName}</h4>`;
-
-                groupFields.forEach(([key, value]) => {
-                    const field = document.createElement('div');
-                    field.className = 'field';
-                    field.innerHTML = `
-                        <span class="field-label">${key}:</span>
-                        <span class="field-value">${highlightMatches(value.toString(), searchTerm)}</span>
-                    `;
-                    group.appendChild(field);
-                });
-
-                details.appendChild(group);
-            }
-        });
-
-        // Add remaining fields that don't fit in any group
-        const remainingFields = Object.entries(result).filter(([key]) => 
-            !Object.values(fieldGroups).flat().some(field => 
-                key.toLowerCase().includes(field.toLowerCase())
-            )
-        );
-
-        if (remainingFields.length > 0) {
-            const otherGroup = document.createElement('div');
-            otherGroup.className = 'field-group';
-            otherGroup.innerHTML = '<h4>Other Information</h4>';
-
-            remainingFields.forEach(([key, value]) => {
-                const field = document.createElement('div');
-                field.className = 'field';
-                field.innerHTML = `
-                    <span class="field-label">${key}:</span>
-                    <span class="field-value">${highlightMatches(value.toString(), searchTerm)}</span>
-                `;
-                otherGroup.appendChild(field);
-            });
-
-            details.appendChild(otherGroup);
-        }
-
-        card.appendChild(details);
         resultsDiv.appendChild(card);
     });
 }
@@ -378,4 +366,32 @@ function formatColumnName(column) {
 
 export function getCurrentSearchParams() {
     return currentSearchParams;
+}
+
+function displaySuggestions(suggestions) {
+    const suggestionsList = document.getElementById('suggestionsList');
+    suggestionsList.innerHTML = '';
+    
+    if (suggestions.length > 0) {
+        suggestions.forEach(suggestion => {
+            const div = document.createElement('div');
+            div.className = 'suggestion-item';
+            div.textContent = suggestion;
+            div.addEventListener('click', () => {
+                // Extract just the search term without the column info in parentheses
+                const searchTerm = suggestion.replace(/\s*\([^)]*\)\s*$/, '');
+                document.getElementById('searchValue').value = searchTerm;
+                hideSuggestions();
+                performSearch();
+            });
+            suggestionsList.appendChild(div);
+        });
+        suggestionsList.style.display = 'block';
+    } else {
+        hideSuggestions();
+    }
+}
+
+function hideSuggestions() {
+    document.getElementById('suggestionsList').style.display = 'none';
 } 
