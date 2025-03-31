@@ -1,0 +1,52 @@
+.upload-section {
+    margin-bottom: var(--spacing-xl);
+}
+
+.upload-controls {
+    display: flex;
+    gap: var(--spacing-md);
+    align-items: center;
+    margin-bottom: var(--spacing-lg);
+}
+
+.upload-controls input[type="file"] {
+    flex: 1;
+    padding: var(--spacing-sm);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-sm);
+    background: white;
+}
+
+.progress-container {
+    margin-top: var(--spacing-md);
+}
+
+.progress {
+    height: 8px;
+    background-color: var(--border-color);
+    border-radius: var(--border-radius-sm);
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    background-color: var(--primary-color);
+    transition: width var(--transition-speed) ease;
+}
+
+.progress-text {
+    margin-top: var(--spacing-sm);
+    font-size: var(--font-size-sm);
+    color: var(--text-color-light);
+    text-align: center;
+}
+
+.progress-status {
+    margin-top: var(--spacing-xs);
+    font-size: var(--font-size-sm);
+    text-align: center;
+}
+
+.progress-status.text-danger {
+    color: var(--error-color);
+} 

@@ -1,0 +1,88 @@
+.file-list-section {
+    margin-bottom: var(--spacing-xl);
+}
+
+.file-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.file-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-md);
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    transition: all var(--transition-speed) ease;
+}
+
+.file-item:hover {
+    box-shadow: var(--box-shadow);
+    transform: translateY(-1px);
+}
+
+.file-item.active {
+    border-color: var(--primary-color);
+    background-color: var(--success-bg);
+}
+
+.file-info {
+    flex: 1;
+}
+
+.file-name {
+    font-weight: bold;
+    color: var(--heading-color);
+    margin-bottom: var(--spacing-xs);
+}
+
+.file-details {
+    font-size: var(--font-size-sm);
+    color: var(--text-color-light);
+}
+
+.file-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+}
+
+.btn-select-file {
+    background-color: var(--primary-color);
+    min-width: 80px;
+}
+
+.btn-select-file.active {
+    background-color: var(--success-color);
+}
+
+.btn-delete-file {
+    background-color: var(--error-color);
+}
+
+.btn-delete-file:hover {
+    background-color: #b91c1c;
+}
+
+.no-files-message {
+    text-align: center;
+    padding: var(--spacing-xl);
+    color: var(--text-color-light);
+    background: white;
+    border: 1px dashed var(--border-color);
+    border-radius: var(--border-radius);
+}
+
+.current-file-info {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md);
+    background-color: var(--success-bg);
+    border-radius: var(--border-radius);
+    margin-bottom: var(--spacing-lg);
+    font-weight: bold;
+    color: var(--success-color);
+} 

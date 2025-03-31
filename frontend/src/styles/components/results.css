@@ -1,0 +1,124 @@
+.results-section {
+    margin-bottom: var(--spacing-xl);
+}
+
+.results-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.result-count {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--border-radius-sm);
+    margin-bottom: var(--spacing-md);
+    font-size: var(--font-size-sm);
+    text-align: center;
+}
+
+.result-card {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    transition: box-shadow var(--transition-speed) ease;
+}
+
+.result-card:hover {
+    box-shadow: var(--box-shadow);
+}
+
+.result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: var(--spacing-md);
+    background-color: var(--bg-color);
+}
+
+.header-content {
+    flex: 1;
+}
+
+.header-content h3 {
+    margin: 0;
+    margin-bottom: var(--spacing-sm);
+    color: var(--heading-color);
+    font-size: var(--font-size-lg);
+}
+
+.company-info {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.company {
+    font-size: var(--font-size-sm);
+}
+
+.company-label {
+    color: var(--text-color-light);
+    margin-right: var(--spacing-xs);
+}
+
+.btn-expand {
+    background-color: var(--secondary-color);
+    min-width: 80px;
+}
+
+.result-details {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height var(--transition-speed) ease;
+}
+
+.result-details.expanded {
+    max-height: 2000px;
+    padding: var(--spacing-md);
+}
+
+.field-group {
+    margin-bottom: var(--spacing-md);
+}
+
+.field-group:last-child {
+    margin-bottom: 0;
+}
+
+.field-group h4 {
+    color: var(--text-color-light);
+    font-size: var(--font-size-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--spacing-sm);
+}
+
+.field {
+    display: flex;
+    margin-bottom: var(--spacing-xs);
+    font-size: var(--font-size-sm);
+}
+
+.field:last-child {
+    margin-bottom: 0;
+}
+
+.field-label {
+    color: var(--text-color-light);
+    min-width: 150px;
+    padding-right: var(--spacing-md);
+}
+
+.field-value {
+    flex: 1;
+    color: var(--text-color);
+}
+
+.highlight {
+    background-color: #fef08a;
+    padding: 0 2px;
+    border-radius: 2px;
+} 

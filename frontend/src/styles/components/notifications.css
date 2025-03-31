@@ -1,0 +1,37 @@
+.notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-radius: var(--border-radius);
+    background: white;
+    box-shadow: var(--box-shadow-lg);
+    transform: translateX(120%);
+    transition: transform var(--transition-speed) ease;
+    z-index: 1000;
+    max-width: 400px;
+}
+
+.notification.show {
+    transform: translateX(0);
+}
+
+.notification.info {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.notification.success {
+    background-color: var(--success-color);
+    color: white;
+}
+
+.notification.error {
+    background-color: var(--error-color);
+    color: white;
+}
+
+.notification.warning {
+    background-color: #f59e0b;
+    color: white;
+} 

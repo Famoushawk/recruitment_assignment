@@ -1,0 +1,85 @@
+/* Import CSS variables */
+@import 'variables.css';
+
+/* Import component styles */
+@import 'components/upload.css';
+@import 'components/file-list.css';
+@import 'components/search.css';
+@import 'components/results.css';
+@import 'components/pagination.css';
+@import 'components/notifications.css';
+
+/* Base styles */
+body {
+    font-family: var(--font-family);
+    line-height: 1.6;
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    max-width: var(--container-width);
+    margin: 0 auto;
+    padding: var(--spacing-lg);
+}
+
+h1, h2, h3, h4 {
+    color: var(--heading-color);
+    margin-bottom: var(--spacing-md);
+}
+
+h1 {
+    font-size: var(--font-size-xl);
+    text-align: center;
+    margin-bottom: var(--spacing-xl);
+}
+
+h2 {
+    font-size: var(--font-size-lg);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: var(--spacing-sm);
+}
+
+section {
+    margin-bottom: var(--spacing-xl);
+    background: var(--section-bg);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-lg);
+    box-shadow: var(--box-shadow);
+}
+
+button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+button:hover {
+    background-color: var(--primary-color-dark);
+}
+
+button:disabled {
+    background-color: var(--disabled-color);
+    cursor: not-allowed;
+}
+
+.loading {
+    text-align: center;
+    padding: var(--spacing-lg);
+    color: var(--text-color-light);
+}
+
+.error-message {
+    color: var(--error-color);
+    background-color: var(--error-bg);
+    padding: var(--spacing-md);
+    border-radius: var(--border-radius-sm);
+    margin: var(--spacing-md) 0;
+    text-align: center;
+} 

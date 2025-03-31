@@ -10,6 +10,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const progressStatus = document.getElementById('progressStatus');
     const paginationContainer = document.getElementById('paginationContainer');
     const fileList = document.getElementById('fileList');
+    const searchInput = document.getElementById('searchValue');
+    const suggestionsList = document.getElementById('suggestionsList');
     let selectedFileId = null;
 
     // Current page and search params (for pagination)
@@ -19,9 +21,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Function to clear all columns and reset state
     function clearColumns() {
-        searchFields.innerHTML = '';
-        selectAllCheckbox.checked = false;
-        selectAllCheckbox.disabled = true;
+        searchFields.innerHTML = '<p>No columns available. Please select a file first.</p>';
+        document.getElementById('selectAllColumns').checked = false;
         resultsDiv.innerHTML = '';
     }
 
@@ -253,8 +254,6 @@ document.addEventListener('DOMContentLoaded', () => {
     loadColumns();
 
     // Set up search suggestions
-    const searchInput = document.getElementById('searchValue');
-    const suggestionsList = document.getElementById('suggestionsList');
     let suggestionsTimer = null;
     let currentSuggestions = [];
 
@@ -620,55 +619,63 @@ document.addEventListener('DOMContentLoaded', () => {
         return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     }
 
-    // Function to load and display file list
-    async function loadFileList() {
+    // Function to check if a file is selected
+    function isFileSelected() {
+        return selectedFileId !== null;
+    }
+
+    // Function to perform search
+    async function performSearch(fields, value, page = 1) {
         try {
-            const response = await fetch('/api/files/');
+            if (resultsDiv) {
+                resultsDiv.innerHTML = '<div class="loading">Searching...</div>';
+            }
+
+            const searchParams = {
+                fields: fields,
+                value: value,
+                page: page,
+                page_size: 20,
+                file_id: selectedFileId
+            };
+
+            console.log('Search request:', searchParams);
+
+            const response = await fetch('/api/search/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(searchParams)
+            });
+
             const data = await response.json();
+            console.log('Search response:', data);
 
-            if (data.files && data.files.length > 0) {
-                fileList.innerHTML = '';
-                data.files.forEach(file => {
-                    const fileItem = document.createElement('div');
-                    fileItem.className = `file-item${file.is_active ? ' active' : ''}`;
-                    fileItem.dataset.fileId = file.id;
+            if (!response.ok) {
+                throw new Error(data.error || 'Search failed');
+            }
 
-                    fileItem.innerHTML = `
-                        <div class="file-info">
-                            <div class="file-name">${file.filename}</div>
-                            <div class="file-details">
-                                Uploaded: ${formatDate(file.upload_date)} | Rows: ${formatNumber(file.row_count)}
-                            </div>
-                        </div>
-                        <div class="file-actions">
-                            <button class="btn-select-file" onclick="selectFile(${file.id})">
-                                ${file.is_active ? 'Selected' : 'Select'}
-                            </button>
-                            <button class="btn-delete-file" onclick="deleteFile(${file.id}, '${file.filename}')">
-                                Delete
-                            </button>
-                        </div>
-                    `;
+            // Store current search parameters for pagination
+            currentSearchParams = { fields, value };
 
-                    fileList.appendChild(fileItem);
-
-                    // If this is the active file, update the current file display
-                    if (file.is_active) {
-                        selectedFileId = file.id;
-                        updateCurrentFileDisplay(file.filename);
-                    }
-                });
+            // Display results
+            if (data.results && data.results.length > 0) {
+                displayResults(data.results, data.total_count);
+                if (data.total_pages > 1) {
+                    createPagination(data.page, data.total_pages);
+                }
             } else {
-                fileList.innerHTML = '<div class="no-files-message">No files uploaded yet.</div>';
+                showErrorMessage('No results found for your search.');
             }
         } catch (error) {
-            console.error('Error loading file list:', error);
-            fileList.innerHTML = '<div class="no-files-message">Error loading files. Please try again.</div>';
+            console.error('Search error:', error);
+            showErrorMessage(`Error performing search: ${error.message}`);
         }
     }
 
-    // Function to select a file
-    async function selectFile(fileId) {
+    // Global functions that need to be accessible from HTML
+    window.selectFile = async function(fileId) {
         try {
             const response = await fetch('/api/files/select/', {
                 method: 'POST',
@@ -684,38 +691,51 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(data.error || 'Error selecting file');
             }
 
-            // Update UI to show selected file
+            // Update selected file ID
             selectedFileId = fileId;
-            updateCurrentFileDisplay(data.filename);
+            console.log('Selected file ID:', selectedFileId); // Debug log
 
-            // Update columns
-            if (data.columns) {
-                updateColumnSelectionUI(data.columns);
-            }
-
-            // Update file list UI
-            const fileItems = fileList.querySelectorAll('.file-item');
+            // Update UI to show selected file
+            const fileItems = document.querySelectorAll('.file-item');
             fileItems.forEach(item => {
                 const isSelected = item.dataset.fileId === fileId.toString();
                 item.classList.toggle('active', isSelected);
                 const selectBtn = item.querySelector('.btn-select-file');
-                selectBtn.textContent = isSelected ? 'Selected' : 'Select';
-                selectBtn.classList.toggle('active', isSelected);
+                if (selectBtn) {
+                    selectBtn.textContent = isSelected ? 'Selected' : 'Select';
+                    selectBtn.classList.toggle('active', isSelected);
+                }
             });
 
+            // Load columns for the selected file
+            if (data.columns && data.columns.length > 0) {
+                updateColumnSelectionUI(data.columns);
+                // Update current file display
+                updateCurrentFileDisplay(data.filename);
+            } else {
+                clearColumns();
+                if (searchFields) {
+                    searchFields.innerHTML = '<div class="no-columns-message">No columns available for this file.</div>';
+                }
+            }
+
             // Clear any existing search results
-            resultsDiv.innerHTML = '';
-            paginationContainer.innerHTML = '';
+            if (resultsDiv) {
+                resultsDiv.innerHTML = '';
+            }
+            if (paginationContainer) {
+                paginationContainer.innerHTML = '';
+            }
 
             showNotification('File selected successfully', 'success');
         } catch (error) {
             console.error('Error selecting file:', error);
             showNotification(error.message, 'error');
+            selectedFileId = null;
         }
-    }
+    };
 
-    // Function to delete a file
-    async function deleteFile(fileId, fileName) {
+    window.deleteFile = async function(fileId, fileName) {
         if (!confirm(`Are you sure you want to delete "${fileName}"?`)) {
             return;
         }
@@ -729,15 +749,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error('Failed to delete file');
             }
 
-            // If the deleted file was selected, clear the search interface
-            if (fileId === selectedFileId) {
-                selectedFileId = null;
-                clearColumns();
-                resultsDiv.innerHTML = '';
-                paginationContainer.innerHTML = '';
-                document.getElementById('currentFileInfo').style.display = 'none';
-            }
-
             // Reload the file list
             await loadFileList();
             showNotification('File deleted successfully', 'success');
@@ -745,10 +756,49 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error deleting file:', error);
             showNotification('Error deleting file. Please try again.', 'error');
         }
-    }
+    };
 
-    // Add deleteFile to window object so it can be called from HTML
-    window.deleteFile = deleteFile;
+    // Function to load and display file list
+    async function loadFileList() {
+        try {
+            const response = await fetch('/api/files/');
+            const data = await response.json();
+
+            const fileList = document.getElementById('fileList');
+            if (data.files && data.files.length > 0) {
+                fileList.innerHTML = '';
+                data.files.forEach(file => {
+                    const fileItem = document.createElement('div');
+                    fileItem.className = `file-item${file.is_active ? ' active' : ''}`;
+                    fileItem.dataset.fileId = file.id;
+
+                    fileItem.innerHTML = `
+                        <div class="file-info">
+                            <div class="file-name">${file.filename}</div>
+                            <div class="file-details">
+                                Uploaded: ${new Date(file.upload_date).toLocaleString()} | Rows: ${file.row_count.toLocaleString()}
+                            </div>
+                        </div>
+                        <div class="file-actions">
+                            <button class="btn-select-file" onclick="selectFile(${file.id})">
+                                ${file.is_active ? 'Selected' : 'Select'}
+                            </button>
+                            <button class="btn-delete-file" onclick="deleteFile(${file.id}, '${file.filename}')">
+                                Delete
+                            </button>
+                        </div>
+                    `;
+
+                    fileList.appendChild(fileItem);
+                });
+            } else {
+                fileList.innerHTML = '<div class="no-files-message">No files uploaded yet.</div>';
+            }
+        } catch (error) {
+            console.error('Error loading file list:', error);
+            fileList.innerHTML = '<div class="no-files-message">Error loading files. Please try again.</div>';
+        }
+    }
 
     // Load file list when page loads
     loadFileList();
@@ -819,96 +869,62 @@ document.addEventListener('DOMContentLoaded', () => {
     uploadButton.removeEventListener('click', handleFileUpload);
     uploadButton.addEventListener('click', handleFileUpload);
 
-    // Update search form submission to check for selected file
-    searchForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
+    // Event listener for search form submission
+    if (searchForm) {
+        searchForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
 
-        if (!selectedFileId) {
-            showNotification('Please select a file to search', 'warning');
-            return;
-        }
-
-        const searchValue = document.getElementById('searchValue').value;
-        const selectedFields = Array.from(searchFields.querySelectorAll('input[type="checkbox"]:checked'))
-            .map(checkbox => checkbox.value);
-
-        if (selectedFields.length === 0) {
-            showNotification('Please select at least one column to search', 'warning');
-            return;
-        }
-
-        // Store current search params for pagination
-        currentSearchParams = {
-            fields: selectedFields,
-            value: searchValue
-        };
-
-        // Reset to first page
-        currentPage = 1;
-
-        // Perform search
-        await performSearch(selectedFields, searchValue, currentPage);
-    });
-
-    // Perform search with pagination
-    async function performSearch(fields, value, page = 1, pageSize = 20) {
-        try {
-            // Show loading state
-            resultsDiv.innerHTML = '<div class="loading-spinner">Loading results...</div>';
-
-            console.log("Search request:", { fields, value, page, page_size: pageSize });
-
-            const response = await fetch('/api/search/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    fields,
-                    value,
-                    page,
-                    page_size: pageSize
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error('Search failed');
+            if (!isFileSelected()) {
+                showErrorMessage('Please select a file before searching.');
+                return;
             }
 
-            const data = await response.json();
-            console.log("Search response:", data);
+            const selectedFields = Array.from(document.querySelectorAll('input[name="searchFields"]:checked'))
+                .map(checkbox => checkbox.value);
 
-            // Update pagination state
-            currentPage = data.page;
-            totalPages = data.total_pages;
+            if (selectedFields.length === 0) {
+                showErrorMessage('Please select at least one column to search.');
+                return;
+            }
 
-            // Display results
-            displayResults(data.results, data.total_count);
+            const searchValue = searchInput ? searchInput.value.trim() : '';
+            if (!searchValue) {
+                showErrorMessage('Please enter a search term.');
+                return;
+            }
 
-            // Update pagination UI
-            createPagination(currentPage, totalPages);
-        } catch (error) {
-            console.error('Error:', error);
-            showNotification(`Error performing search: ${error.message}`, 'error');
-            resultsDiv.innerHTML = '<div class="error-message">Error performing search. Please try again.</div>';
-        }
+            // Use the performSearch function
+            await performSearch(selectedFields, searchValue);
+        });
     }
 
-    // Export results button
-    document.getElementById('exportResultsBtn').addEventListener('click', () => {
-        if (!currentSearchParams) {
-            showNotification('Please perform a search first', 'warning');
-            return;
-        }
+    // Handle suggestions
+    if (searchInput && suggestionsList) {
+        let suggestionsTimer = null;
 
-        const { fields, value } = currentSearchParams;
-        const queryParams = new URLSearchParams();
-        fields.forEach(field => queryParams.append('fields', field));
-        queryParams.append('value', value);
+        searchInput.addEventListener('input', () => {
+            const query = searchInput.value.trim();
 
-        // Redirect to download endpoint
-        window.location.href = `/api/download-results/?${queryParams.toString()}`;
-    });
+            if (suggestionsTimer) {
+                clearTimeout(suggestionsTimer);
+            }
+
+            if (!isFileSelected()) {
+                return;
+            }
+
+            suggestionsTimer = setTimeout(() => {
+                fetchSuggestions(query);
+            }, 300);
+        });
+
+        // Hide suggestions when clicking outside
+        document.addEventListener('click', (e) => {
+            if (e.target !== searchInput && e.target !== suggestionsList && !suggestionsList.contains(e.target)) {
+                suggestionsList.style.display = 'none';
+            }
+        });
+    }
 
     // Highlight matches in text
     function highlightMatches(text, searchTerm) {
@@ -926,62 +942,51 @@ document.addEventListener('DOMContentLoaded', () => {
         return text.replace(regex, '<span class="highlight">$1</span>');
     }
 
-    function displayResults(data, totalCount) {
-        if (!data || data.length === 0) {
+    function displayResults(results, totalCount) {
+        if (!resultsDiv) return;
+
+        if (!results || results.length === 0) {
             resultsDiv.innerHTML = '<div class="no-results">No results found</div>';
-            paginationContainer.innerHTML = '';
+            if (paginationContainer) {
+                paginationContainer.innerHTML = '';
+            }
             return;
         }
 
-        // Get current search term
-        const searchTerm = document.getElementById('searchValue').value;
+        const searchTerm = searchInput ? searchInput.value.trim() : '';
 
-        // Create a card-based layout for results
+        // Create results container
         const resultsContainer = document.createElement('div');
-        resultsContainer.className = 'results-container';
+        resultsContainer.className = 'results-list';
 
-        // Add result count summary
-        const resultSummary = document.createElement('div');
-        resultSummary.className = 'result-summary';
-        resultSummary.textContent = `Found ${totalCount} result${totalCount !== 1 ? 's' : ''} (showing ${data.length})`;
-        resultsContainer.appendChild(resultSummary);
+        // Add result count
+        const resultCount = document.createElement('div');
+        resultCount.className = 'result-count';
+        resultCount.textContent = `Found ${totalCount} result${totalCount !== 1 ? 's' : ''}`;
+        resultsContainer.appendChild(resultCount);
 
         // Add each result as a card
-        data.forEach((row, index) => {
+        results.forEach((result, index) => {
             const card = document.createElement('div');
             card.className = 'result-card';
-
-            // Add relevance indicator if available
-            if (row._relevance) {
-                card.dataset.relevance = row._relevance;
-            }
 
             // Create header with key information
             const header = document.createElement('div');
             header.className = 'result-header';
 
             // Prioritize showing product and company information in the header
-            const productName = row['Product'] || '';
-            const indianCompany = row['IndianCompany'] || row['Indian Company'] || '';
-            const foreignCompany = row['ForeignCompany'] || row['Foreign Company'] || '';
-            const itemNo = row['Item No'] || '';
+            const productName = result['Product'] || '';
+            const indianCompany = result['IndianCompany'] || result['Indian Company'] || '';
+            const foreignCompany = result['ForeignCompany'] || result['Foreign Company'] || '';
 
-            // Create header with highlighted matches
+            // Create header content
             const headerContent = document.createElement('div');
             headerContent.className = 'header-content';
 
             // Add product name with highlighting
             const productTitle = document.createElement('h3');
-            productTitle.innerHTML = highlightMatches(productName, searchTerm);
+            productTitle.innerHTML = productName ? highlightMatches(productName, searchTerm) : 'No Product Name';
             headerContent.appendChild(productTitle);
-
-            // Add item number if available
-            if (itemNo) {
-                const itemNumberSpan = document.createElement('span');
-                itemNumberSpan.className = 'item-number';
-                itemNumberSpan.textContent = `Item #${itemNo}`;
-                productTitle.appendChild(itemNumberSpan);
-            }
 
             // Add company information if available
             if (indianCompany || foreignCompany) {
@@ -1007,16 +1012,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
             header.appendChild(headerContent);
 
-            // Add action buttons
+            // Add expand/collapse button
             const actionButtons = document.createElement('div');
             actionButtons.className = 'result-actions';
             actionButtons.innerHTML = `
-                <button class="btn-expand" onclick="toggleResultDetails(${index})">Details</button>
+                <button class="btn-expand" onclick="toggleResultDetails(${index})">
+                    Details
+                </button>
             `;
             header.appendChild(actionButtons);
             card.appendChild(header);
 
-            // Create the details section with all data in a clean grid layout
+            // Create details section
             const details = document.createElement('div');
             details.className = 'result-details';
             details.id = `result-details-${index}`;
@@ -1029,8 +1036,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 { title: 'Financial Information', fields: ['Item Rate I N V', 'Currency', 'F O B I N R', 'Total Amount'] }
             ];
 
+            // Create field groups
             fieldGroups.forEach(group => {
-                const groupExists = group.fields.some(field => row[field] !== undefined && row[field] !== '');
+                const groupExists = group.fields.some(field => result[field] !== undefined && result[field] !== '');
 
                 if (groupExists) {
                     const fieldGroup = document.createElement('div');
@@ -1044,7 +1052,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     fieldsGrid.className = 'fields-grid';
 
                     group.fields.forEach(field => {
-                        if (row[field] !== undefined && row[field] !== '') {
+                        if (result[field] !== undefined && result[field] !== '') {
                             const fieldItem = document.createElement('div');
                             fieldItem.className = 'field-item';
 
@@ -1054,7 +1062,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                             const fieldValue = document.createElement('div');
                             fieldValue.className = 'field-value';
-                            fieldValue.textContent = row[field];
+                            fieldValue.innerHTML = highlightMatches(String(result[field]), searchTerm);
 
                             fieldItem.appendChild(fieldLabel);
                             fieldItem.appendChild(fieldValue);
@@ -1067,9 +1075,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            // Add a section for any fields that weren't in the predefined groups
-            const remainingFields = Object.keys(row).filter(field =>
-                !fieldGroups.some(group => group.fields.includes(field))
+            // Add remaining fields that weren't in any group
+            const remainingFields = Object.keys(result).filter(field => 
+                !fieldGroups.some(group => group.fields.includes(field)) &&
+                field !== '_relevance' // Exclude the relevance score
             );
 
             if (remainingFields.length > 0) {
@@ -1084,7 +1093,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 fieldsGrid.className = 'fields-grid';
 
                 remainingFields.forEach(field => {
-                    if (row[field] !== undefined && row[field] !== '') {
+                    if (result[field] !== undefined && result[field] !== '') {
                         const fieldItem = document.createElement('div');
                         fieldItem.className = 'field-item';
 
@@ -1094,7 +1103,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         const fieldValue = document.createElement('div');
                         fieldValue.className = 'field-value';
-                        fieldValue.textContent = row[field];
+                        fieldValue.innerHTML = highlightMatches(String(result[field]), searchTerm);
 
                         fieldItem.appendChild(fieldLabel);
                         fieldItem.appendChild(fieldValue);
@@ -1110,23 +1119,27 @@ document.addEventListener('DOMContentLoaded', () => {
             resultsContainer.appendChild(card);
         });
 
+        // Clear previous results and add new ones
         resultsDiv.innerHTML = '';
         resultsDiv.appendChild(resultsContainer);
 
-        // Add script to handle expanding/collapsing details
+        // Add toggle function if it doesn't exist
         if (!window.toggleResultDetails) {
-            const script = document.createElement('script');
-            script.textContent = `
-                function toggleResultDetails(index) {
-                    const details = document.getElementById('result-details-' + index);
-                    if (details) {
-                        details.classList.toggle('expanded');
-                        const button = event.currentTarget;
-                        button.textContent = details.classList.contains('expanded') ? 'Hide' : 'Details';
-                    }
+            window.toggleResultDetails = function(index) {
+                const details = document.getElementById(`result-details-${index}`);
+                if (details) {
+                    details.classList.toggle('expanded');
+                    const button = event.currentTarget;
+                    button.textContent = details.classList.contains('expanded') ? 'Hide' : 'Details';
                 }
-            `;
-            document.body.appendChild(script);
+            };
+        }
+    }
+
+    // Function to show error message
+    function showErrorMessage(message) {
+        if (resultsDiv) {
+            resultsDiv.innerHTML = `<div class="error-message">${message}</div>`;
         }
     }
 });

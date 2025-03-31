@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>File Search Application</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
     <div class="container">
@@ -23,6 +23,7 @@
                     <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%"></div>
                 </div>
                 <div id="progressText" class="progress-text">Processing...</div>
+                <div id="progressStatus" class="progress-status"></div>
             </div>
         </section>
 
@@ -35,33 +36,32 @@
             </div>
         </section>
 
+        <!-- Current File Info -->
+        <div id="currentFileInfo" class="current-file-info" style="display: none;">
+            <span id="currentFileName"></span>
+        </div>
+
         <!-- Search Section -->
         <section class="search-section">
-            <h2>Search Data</h2>
-            <div id="currentFileInfo" class="current-file-info" style="display: none;">
-                <span class="file-icon">📄</span>
-                <span id="currentFileName">No file selected</span>
-            </div>
+            <h2>Search</h2>
             <form id="searchForm">
+                <div class="search-controls">
+                    <div class="search-input-container">
+                        <input type="text" id="searchValue" placeholder="Enter search term...">
+                        <div id="suggestionsList" class="suggestions-list"></div>
+                    </div>
+                    <button type="submit">Search</button>
+                </div>
+                
                 <div class="columns-section">
-                    <h3>Select Columns to Search:</h3>
-                    <div class="select-all-container">
+                    <div class="select-all">
                         <label class="checkbox-container">
                             <input type="checkbox" id="selectAllColumns">
-                            <span class="checkbox-label">Select All</span>
+                            <span class="checkbox-label">Select All Columns</span>
                         </label>
                     </div>
-                    <div class="columns-list" id="searchFields">
-                        <!-- Columns will be dynamically added here -->
-                    </div>
-                </div>
-
-                <div class="search-input-section">
-                    <label for="searchValue">Search Value:</label>
-                    <input type="text" id="searchValue" placeholder="Enter search term...">
-                    <div class="search-actions">
-                        <button type="submit" class="btn-primary">Search</button>
-                        <button type="button" id="exportResultsBtn" class="btn-secondary">Export Results</button>
+                    <div id="searchFields" class="search-fields">
+                        <!-- Column checkboxes will be added here -->
                     </div>
                 </div>
             </form>
@@ -69,12 +69,12 @@
 
         <!-- Results Section -->
         <section class="results-section">
-            <h2>Results</h2>
-            <div id="results"></div>
+            <div id="results" class="results-list"></div>
             <div id="paginationContainer" class="pagination-container"></div>
         </section>
     </div>
 
-    <script src="app.js"></script>
+    <!-- Modular JavaScript imports -->
+    <script type="module" src="js/main.js"></script>
 </body>
 </html>
