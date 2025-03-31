@@ -1,3 +1,7 @@
+# Excel Search Application
+
+A web-based application that allows users to upload Excel files and perform advanced searches across the data. Built with Django, PostgreSQL, and a modern frontend interface.
+
 ## Features
 
 - Excel file upload and processing
@@ -13,7 +17,7 @@
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/Famoushawk/recruitment_assignment.git
+   git clone https://github.com/yourusername/recruitment_assignment.git
    cd recruitment_assignment
    ```
 

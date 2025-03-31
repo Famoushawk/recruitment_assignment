@@ -32,42 +32,32 @@ def search_data(request):
         except FileInfo.DoesNotExist:
             return JsonResponse({'error': 'File not found'}, status=404)
 
-        # Start with base query
         query = DataEntry.objects.filter(file=file_info)
         
-        # Build search conditions
         search_conditions = Q()
         
-        # For each search term, check if it exists in any of the selected fields
         for term in search_terms:
             term_condition = Q()
             for field in fields:
-                # Try both original and normalized field names
                 field_variations = [field, field.replace(' ', '')]
                 for field_name in field_variations:
-                    # Use icontains for case-insensitive partial matching
                     json_field_lookup = f"data__{field_name}__icontains"
                     term_condition |= Q(**{json_field_lookup: term})
             
-            # Add this term's conditions to the main search conditions
             search_conditions &= term_condition
 
-        # Apply search conditions
         query = query.filter(search_conditions)
         
         print(f"Query SQL: {str(query.query)}")
 
-        # Calculate pagination
         total_count = query.count()
         print(f"Total results found: {total_count}")
         
         total_pages = (total_count + page_size - 1) // page_size
         offset = (page - 1) * page_size
 
-        # Get paginated results
         results = query[offset:offset + page_size]
 
-        # Format results
         formatted_results = []
         for entry in results:
             result = {

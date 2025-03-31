@@ -5,7 +5,6 @@ import { initializePagination } from './modules/pagination.js';
 import { initializeSuggestions } from './modules/suggestions.js';
 import { showNotification } from './modules/ui.js';
 
-// Initialize all modules when the DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     try {
         initializeFileUpload();
@@ -19,5 +18,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Global functions needed for HTML onclick handlers
 window.showNotification = showNotification; 

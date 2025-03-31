@@ -6,7 +6,6 @@ import { initializePagination } from './modules/pagination.js';
 import { initializeUI } from './modules/ui.js';
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Initialize all modules
     initializeUI();
     initializeFileUpload();
     initializeFileList();
