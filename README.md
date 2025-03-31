@@ -17,7 +17,7 @@ A web-based application that allows users to upload Excel files and perform adva
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/recruitment_assignment.git
+   git clone https://github.com/Famoushawk/recruitment_assignment.git
    cd recruitment_assignment
    ```
 
