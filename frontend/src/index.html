@@ -3,38 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CSV Search Application</title>
+    <title>File Search Application</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
-        <h1>CSV Search Application</h1>
+        <h1>File Search Application</h1>
 
         <!-- Upload Section -->
         <section class="upload-section">
-            <h2>Upload CSV File</h2>
-            <form id="uploadForm">
-                <input type="file" id="fileInput" accept=".csv">
-                <button type="submit" class="btn-primary">Upload</button>
-            </form>
-
-            <!-- Progress Bar (initially hidden) -->
+            <h2>Upload File</h2>
+            <div class="upload-controls">
+                <input type="file" id="fileInput" accept=".csv,.xlsx">
+                <button type="button" id="uploadButton">Upload</button>
+            </div>
+            <!-- Progress bar -->
             <div id="uploadProgress" class="progress-container" style="display: none;">
-                <div class="progress-header">
-                    <span id="progressStatus">Processing...</span>
-                </div>
                 <div class="progress">
-                    <div
-                        id="progressBar"
-                        class="progress-bar"
-                        role="progressbar"
-                        style="width: 0%;"
-                        aria-valuenow="0"
-                        aria-valuemin="0"
-                        aria-valuemax="100">
-                    </div>
+                    <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%"></div>
                 </div>
-                <div class="progress-text" id="progressText">0%</div>
+                <div id="progressText" class="progress-text">Processing...</div>
             </div>
         </section>
 
@@ -70,7 +58,6 @@
         <section class="results-section">
             <h2>Results</h2>
             <div id="results"></div>
-            <!-- Pagination Container -->
             <div id="paginationContainer" class="pagination-container"></div>
         </section>
     </div>

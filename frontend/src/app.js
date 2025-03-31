@@ -575,75 +575,102 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 5000);
     }
 
-    // Upload form submission
-    uploadForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const fileInput = document.getElementById('fileInput');
+    // Handle file upload
+    const fileInput = document.getElementById('fileInput');
+    const uploadButton = document.getElementById('uploadButton');
+    uploadButton.addEventListener('click', async () => {
         const file = fileInput.files[0];
-
         if (!file) {
-            showNotification('Please select a file to upload', 'error');
+            alert('Please select a file first');
             return;
         }
 
-        // Check if file is a CSV
-        if (!file.name.endsWith('.csv')) {
-            showNotification('Please upload a CSV file', 'error');
-            return;
-        }
-
-        // Check file size (warn if larger than 50MB)
-        const MAX_SIZE_WARNING = 50 * 1024 * 1024; // 50MB
-        if (file.size > MAX_SIZE_WARNING) {
-            const confirmUpload = confirm(`The file is ${(file.size / (1024 * 1024)).toFixed(2)}MB, which is quite large. Processing may take some time. Continue?`);
-            if (!confirmUpload) {
-                return;
-            }
-        }
+        // Show progress container and reset progress
+        progressContainer.style.display = 'block';
+        progressBar.style.width = '0%';
+        progressText.textContent = 'Starting upload...';
+        uploadButton.disabled = true;
 
         const formData = new FormData();
         formData.append('file', file);
 
         try {
-            // Reset progress UI
-            progressContainer.style.display = 'none';
-            progressBar.style.width = '0%';
-            progressBar.setAttribute('aria-valuenow', 0);
-            progressText.textContent = '0%';
-            progressStatus.textContent = 'Starting...';
-            progressStatus.classList.remove('text-danger');
-
-            // Display upload starting message
-            showNotification('Starting file upload...', 'info');
-
-            // Submit the file
+            // Start upload
             const response = await fetch('/api/upload/', {
                 method: 'POST',
                 body: formData
             });
 
-            if (!response.ok) {
-                throw new Error('Upload failed');
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Server error: Invalid response format');
             }
 
             const data = await response.json();
-            console.log("Upload response:", data);
 
-            // Show progress UI
-            progressContainer.style.display = 'block';
-
-            // Start progress checking
-            if (progressInterval) {
-                clearInterval(progressInterval);
+            if (!response.ok) {
+                throw new Error(data.error || `Upload failed: ${response.status} ${response.statusText}`);
             }
-            progressInterval = setInterval(checkUploadProgress, 1000);
 
-            // Clear file input
+            // Show processing progress
+            progressBar.style.width = '50%';
+            progressText.textContent = 'Processing file...';
+
+            // Poll for progress updates
+            let processingComplete = false;
+            while (!processingComplete) {
+                const progressResponse = await fetch('/api/upload-progress/');
+                const progressData = await progressResponse.json();
+                
+                if (progressData.status === 'completed') {
+                    processingComplete = true;
+                    progressBar.style.width = '100%';
+                    progressText.textContent = `Upload complete! Processed ${progressData.total_rows_processed || 0} rows.`;
+                } else if (progressData.status === 'error') {
+                    throw new Error(progressData.error || 'Error processing file');
+                } else {
+                    // Update progress bar based on processed rows
+                    const progress = progressData.total_rows_processed ? 
+                        (progressData.processed_rows / progressData.total_rows_processed * 100) : 50;
+                    progressBar.style.width = `${Math.min(90, 50 + progress/2)}%`;
+                    progressText.textContent = `Processing rows... ${progressData.processed_rows || 0} completed`;
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Poll every second
+            }
+
+            // Clear existing columns and add new ones
+            searchFields.innerHTML = '';
+            if (data.columns && Array.isArray(data.columns) && data.columns.length > 0) {
+                data.columns.forEach(column => {
+                    if (column && typeof column === 'string') {
+                        const checkbox = createColumnCheckbox(column);
+                        searchFields.appendChild(checkbox);
+                    }
+                });
+                selectAllCheckbox.disabled = false;
+                updateSelectAllState();
+            } else {
+                searchFields.innerHTML = '<div class="no-columns-message">No columns found in the file.</div>';
+                selectAllCheckbox.disabled = true;
+            }
+
+            // Reset file input and button
             fileInput.value = '';
+            uploadButton.disabled = false;
+
+            // Hide progress after a delay
+            setTimeout(() => {
+                progressContainer.style.display = 'none';
+            }, 3000);
+
         } catch (error) {
-            console.error('Error:', error);
-            showNotification(`Error uploading file: ${error.message}`, 'error');
-            clearColumns();
+            console.error('Upload error:', error);
+            progressBar.style.width = '100%';
+            progressBar.style.backgroundColor = '#dc3545';
+            progressText.textContent = error.message || 'Error uploading file. Please try again.';
+            uploadButton.disabled = false;
         }
     });
 
