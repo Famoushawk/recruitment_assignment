@@ -4,7 +4,7 @@ from django.http import JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.db import transaction
-from .models import DataEntry
+from .models import DataEntry, FileInfo
 from django.db.models import Q
 import io
 import time
@@ -12,15 +12,18 @@ import threading
 from django.core.paginator import Paginator
 from openpyxl import load_workbook
 
-# Global variable to store upload progress
+# Global variable to store upload progress and active file
 upload_progress = {
     'total_rows': 0,
     'processed_rows': 0,
     'status': 'idle',  # 'idle', 'in_progress', 'completed', 'error'
     'error': None,
-    'columns': []
+    'columns': [],
+    'current_file': None
 }
 
+# Store the ID of the currently active file
+active_file_id = None
 
 def reset_progress():
     """Reset the upload progress tracker"""
@@ -30,7 +33,8 @@ def reset_progress():
         'processed_rows': 0,
         'status': 'idle',
         'error': None,
-        'columns': []
+        'columns': [],
+        'current_file': None
     }
 
 
@@ -111,11 +115,15 @@ def upload_file(request):
             'processed_rows': 0,
             'status': 'in_progress',
             'error': None,
-            'columns': []
+            'columns': [],
+            'current_file': file.name
         }
         
-        # Clear existing data
-        DataEntry.objects.all().delete()
+        # Create new FileInfo entry
+        file_info = FileInfo.objects.create(
+            filename=file.name,
+            is_active=True
+        )
         
         # Initialize variables
         chunk_size = 1000  # Process 1000 rows at a time
@@ -150,7 +158,7 @@ def upload_file(request):
                 }
                 
                 if cleaned_row:
-                    rows_to_create.append(DataEntry(data=cleaned_row))
+                    rows_to_create.append(DataEntry(data=cleaned_row, file=file_info))
                     total_rows_processed += 1
                     upload_progress['processed_rows'] = total_rows_processed
                 
@@ -193,7 +201,7 @@ def upload_file(request):
                         row_data[header] = value.strip()
                 
                 if row_data:
-                    rows_to_create.append(DataEntry(data=row_data))
+                    rows_to_create.append(DataEntry(data=row_data, file=file_info))
                     total_rows_processed += 1
                     upload_progress['processed_rows'] = total_rows_processed
                 
@@ -211,12 +219,21 @@ def upload_file(request):
         if rows_to_create:
             DataEntry.objects.bulk_create(rows_to_create)
         
+        # Update file info with final row count
+        file_info.row_count = total_rows_processed
+        file_info.save()
+        
+        # Set this as the active file
+        global active_file_id
+        active_file_id = file_info.id
+        
         # Update progress status
         upload_progress['status'] = 'completed'
         upload_progress['total_rows_processed'] = total_rows_processed
         
         return JsonResponse({
             'message': 'File uploaded successfully',
+            'file_id': file_info.id,
             'columns': columns,
             'total_rows_processed': total_rows_processed
         })
@@ -224,9 +241,8 @@ def upload_file(request):
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
-        print(f"Upload error: {error_details}")  # Log the full error
+        print(f"Upload error: {error_details}")
         
-        # Update progress status
         upload_progress['status'] = 'error'
         upload_progress['error'] = str(e)
         
@@ -238,10 +254,54 @@ def upload_file(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
-def get_upload_progress(request):
-    """Get the current progress of an active upload"""
-    global upload_progress
-    return JsonResponse(upload_progress)
+def list_files(request):
+    """Get list of uploaded files"""
+    try:
+        files = FileInfo.objects.all().order_by('-upload_date')
+        return JsonResponse({
+            'files': [{
+                'id': f.id,
+                'filename': f.filename,
+                'upload_date': f.upload_date.isoformat(),
+                'row_count': f.row_count,
+                'is_active': f.is_active
+            } for f in files]
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def select_file(request):
+    """Select a file as active for searching"""
+    try:
+        data = json.loads(request.body)
+        file_id = data.get('file_id')
+        
+        if not file_id:
+            return JsonResponse({'error': 'File ID is required'}, status=400)
+            
+        file_info = FileInfo.objects.get(id=file_id)
+        
+        # Update global active file
+        global active_file_id
+        active_file_id = file_id
+        
+        # Get sample entry to get columns
+        sample_entry = DataEntry.objects.filter(file=file_info).first()
+        columns = list(sample_entry.data.keys()) if sample_entry else []
+        
+        return JsonResponse({
+            'message': 'File selected successfully',
+            'filename': file_info.filename,
+            'columns': columns
+        })
+        
+    except FileInfo.DoesNotExist:
+        return JsonResponse({'error': 'File not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
 
 
 @csrf_exempt
@@ -249,18 +309,30 @@ def get_upload_progress(request):
 def get_columns(request):
     """Get available columns from the database"""
     try:
+        global active_file_id
+        
         # First check if we have in-progress upload with columns
-        global upload_progress
         if upload_progress['status'] in ['in_progress', 'completed'] and upload_progress['columns']:
-            return JsonResponse({'columns': upload_progress['columns']})
+            return JsonResponse({
+                'columns': upload_progress['columns'],
+                'current_file': upload_progress['current_file']
+            })
 
-        # If not, get from database
-        sample_entry = DataEntry.objects.first()
-        if not sample_entry:
-            return JsonResponse({'columns': []})
+        # If not, get from active file
+        if active_file_id:
+            file_info = FileInfo.objects.get(id=active_file_id)
+            sample_entry = DataEntry.objects.filter(file=file_info).first()
+            
+            if sample_entry:
+                return JsonResponse({
+                    'columns': list(sample_entry.data.keys()),
+                    'current_file': file_info.filename
+                })
 
-        columns = list(sample_entry.data.keys())
-        return JsonResponse({'columns': columns})
+        return JsonResponse({
+            'columns': [],
+            'current_file': None
+        })
 
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
@@ -332,57 +404,33 @@ def search_data(request):
         fields = data.get('fields', [])
         value = data.get('value', '')
         page = data.get('page', 1)
-        page_size = data.get('page_size', 20)  # Default to 20 results per page
-
+        page_size = data.get('page_size', 20)
+        
         if not fields:
             return JsonResponse({'error': 'Fields are required'}, status=400)
+            
+        # Get active file
+        global active_file_id
+        if not active_file_id:
+            return JsonResponse({'error': 'No file selected'}, status=400)
+            
+        file_info = FileInfo.objects.get(id=active_file_id)
 
-        # Handle empty search value
-        if not value:
-            return JsonResponse({
-                'results': [],
-                'total_count': 0,
-                'page': page,
-                'total_pages': 0
-            })
-
-        # Identify priority fields for boosting relevance
-        priority_fields = []
-        normal_fields = []
-
-        # Priority fields mapping (case-insensitive)
-        priority_field_names = ['product', 'indiancompany', 'foreigncompany']
-
+        # Start with base query for the current file
+        query = Q(file=file_info)
+        
+        # Add field-specific queries with OR operator
+        field_query = Q()
         for field in fields:
-            clean_field = field.strip()
-            normalized = clean_field.lower().replace(' ', '')
+            field_query |= Q(**{f"data__{field.strip()}__icontains": value})
+        
+        # Combine file query with field query using AND
+        query &= field_query
 
-            if normalized in priority_field_names:
-                priority_fields.append(clean_field)
-            else:
-                normal_fields.append(clean_field)
+        # Perform the search
+        results = DataEntry.objects.filter(query)
 
-        # Build query with two parts: priority and normal
-        # This allows us to annotate and order results by relevance
-        priority_query = Q()
-        for field in priority_fields:
-            priority_query |= Q(**{f"data__{field}__icontains": value})
-
-        normal_query = Q()
-        for field in normal_fields:
-            normal_query |= Q(**{f"data__{field}__icontains": value})
-
-        # Combine queries
-        combined_query = priority_query | normal_query
-
-        # Perform search
-        results = DataEntry.objects.filter(combined_query)
-
-        # Apply relevance ranking: prioritize matches in important fields
-        # We'll use a custom sorting approach by adding annotations
-        # For PostgreSQL, we could use more advanced features
-
-        # First get all matching results
+        # Get all matching results
         all_results = list(results)
 
         # Define a function to calculate relevance score
@@ -390,44 +438,24 @@ def search_data(request):
             score = 0
             search_value = value.lower()
 
-            # Check priority fields first (higher score)
-            for field in priority_fields:
+            # Check each field for matches
+            for field in fields:
                 if field in entry_data and entry_data[field]:
                     field_value = str(entry_data[field]).lower()
                     
                     # Exact match gets highest score
                     if field_value == search_value:
-                        if field.lower() == 'product':
-                            score += 200  # Product exact match
-                        else:
-                            score += 150  # Company exact match
+                        score += 100
                     # Prefix match gets high score
                     elif field_value.startswith(search_value):
-                        if field.lower() == 'product':
-                            score += 150  # Product prefix match
-                        else:
-                            score += 100  # Company prefix match
-                    # Contains match gets base priority score
+                        score += 75
+                    # Contains match gets base score
                     elif search_value in field_value:
-                        if field.lower() == 'product':
-                            score += 100  # Product contains match
-                        else:
-                            score += 50   # Company contains match
-
-            # Then check other fields (lower priority)
-            for field in normal_fields:
-                if field in entry_data and entry_data[field]:
-                    field_value = str(entry_data[field]).lower()
-                    if field_value == search_value:
-                        score += 30  # Exact match in other fields
-                    elif field_value.startswith(search_value):
-                        score += 20  # Prefix match in other fields
-                    elif search_value in field_value:
-                        score += 10  # Contains match in other fields
+                        score += 50
 
             return score
 
-        # Sort results by relevance score (higher first)
+        # Sort results by relevance score
         sorted_results = sorted(
             all_results,
             key=lambda entry: calculate_relevance(entry.data),
@@ -441,17 +469,11 @@ def search_data(request):
         start_idx = (page - 1) * page_size
         end_idx = start_idx + page_size
         paginated_results = sorted_results[start_idx:end_idx]
-        total_pages = (total_count + page_size - 1) // page_size  # Ceiling division
+        total_pages = (total_count + page_size - 1) // page_size
 
-        # Prepare response with additional relevance info
+        # Prepare response
         response_data = {
-            'results': [
-                {
-                    **entry.data,
-                    '_relevance': calculate_relevance(entry.data)  # Add relevance score for debugging
-                }
-                for entry in paginated_results
-            ],
+            'results': [entry.data for entry in paginated_results],
             'total_count': total_count,
             'page': page,
             'total_pages': total_pages
@@ -460,6 +482,7 @@ def search_data(request):
         return JsonResponse(response_data, safe=False)
 
     except Exception as e:
+        print(f"Search error: {str(e)}")  # Log the error
         return JsonResponse({'error': str(e)}, status=400)
 
 

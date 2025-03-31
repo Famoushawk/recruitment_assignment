@@ -26,9 +26,22 @@
             </div>
         </section>
 
+        <!-- File List Section -->
+        <section class="file-list-section">
+            <h2>Available Files</h2>
+            <div class="file-list" id="fileList">
+                <!-- Files will be listed here -->
+                <div class="no-files-message">No files uploaded yet.</div>
+            </div>
+        </section>
+
         <!-- Search Section -->
         <section class="search-section">
             <h2>Search Data</h2>
+            <div id="currentFileInfo" class="current-file-info" style="display: none;">
+                <span class="file-icon">📄</span>
+                <span id="currentFileName">No file selected</span>
+            </div>
             <form id="searchForm">
                 <div class="columns-section">
                     <h3>Select Columns to Search:</h3>

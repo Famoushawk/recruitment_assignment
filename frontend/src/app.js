@@ -9,6 +9,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const progressText = document.getElementById('progressText');
     const progressStatus = document.getElementById('progressStatus');
     const paginationContainer = document.getElementById('paginationContainer');
+    const fileList = document.getElementById('fileList');
+    let selectedFileId = null;
 
     // Current page and search params (for pagination)
     let currentPage = 1;
@@ -117,10 +119,14 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(data => {
                 if (data.columns && data.columns.length > 0) {
                     updateColumnSelectionUI(data.columns);
+                    // Update current file display
+                    updateCurrentFileDisplay(data.current_file);
                 } else {
                     clearColumns();
                     searchFields.innerHTML = '<div class="no-columns-message">No columns available. Please upload a CSV file.</div>';
                     selectAllCheckbox.disabled = true;
+                    // Hide file info when no columns
+                    document.getElementById('currentFileInfo').style.display = 'none';
                 }
             })
             .catch(error => {
@@ -128,7 +134,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearColumns();
                 searchFields.innerHTML = '<div class="no-columns-message">Error loading columns. Please try refreshing the page.</div>';
                 selectAllCheckbox.disabled = true;
+                // Hide file info on error
+                document.getElementById('currentFileInfo').style.display = 'none';
             });
+    }
+
+    // Function to update current file display
+    function updateCurrentFileDisplay(fileName) {
+        const fileInfo = document.getElementById('currentFileInfo');
+        const fileNameElement = document.getElementById('currentFileName');
+        
+        if (fileName) {
+            fileNameElement.textContent = `Currently searching in: ${fileName}`;
+            fileInfo.style.display = 'flex';
+        } else {
+            fileInfo.style.display = 'none';
+        }
     }
 
     // Create pagination controls
@@ -588,92 +609,162 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 5000);
     }
 
-    // Handle file upload
-    const fileInput = document.getElementById('fileInput');
-    const uploadButton = document.getElementById('uploadButton');
-    uploadButton.addEventListener('click', async () => {
+    // Function to format date
+    function formatDate(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+    }
+
+    // Function to format number with commas
+    function formatNumber(num) {
+        return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+
+    // Function to load and display file list
+    async function loadFileList() {
+        try {
+            const response = await fetch('/api/files/');
+            const data = await response.json();
+
+            if (data.files && data.files.length > 0) {
+                fileList.innerHTML = '';
+                data.files.forEach(file => {
+                    const fileItem = document.createElement('div');
+                    fileItem.className = `file-item${file.is_active ? ' active' : ''}`;
+                    fileItem.dataset.fileId = file.id;
+
+                    fileItem.innerHTML = `
+                        <div class="file-info">
+                            <div class="file-name">${file.filename}</div>
+                            <div class="file-details">
+                                Uploaded: ${formatDate(file.upload_date)} | Rows: ${formatNumber(file.row_count)}
+                            </div>
+                        </div>
+                        <div class="file-actions">
+                            <button class="btn-select-file" onclick="selectFile(${file.id})">
+                                ${file.is_active ? 'Selected' : 'Select'}
+                            </button>
+                        </div>
+                    `;
+
+                    fileList.appendChild(fileItem);
+
+                    // If this is the active file, update the current file display
+                    if (file.is_active) {
+                        selectedFileId = file.id;
+                        updateCurrentFileDisplay(file.filename);
+                    }
+                });
+            } else {
+                fileList.innerHTML = '<div class="no-files-message">No files uploaded yet.</div>';
+            }
+        } catch (error) {
+            console.error('Error loading file list:', error);
+            fileList.innerHTML = '<div class="no-files-message">Error loading files. Please try again.</div>';
+        }
+    }
+
+    // Function to select a file
+    async function selectFile(fileId) {
+        try {
+            const response = await fetch('/api/files/select/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ file_id: fileId })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Error selecting file');
+            }
+
+            // Update UI to show selected file
+            selectedFileId = fileId;
+            updateCurrentFileDisplay(data.filename);
+
+            // Update columns
+            if (data.columns) {
+                updateColumnSelectionUI(data.columns);
+            }
+
+            // Update file list UI
+            const fileItems = fileList.querySelectorAll('.file-item');
+            fileItems.forEach(item => {
+                const isSelected = item.dataset.fileId === fileId.toString();
+                item.classList.toggle('active', isSelected);
+                const selectBtn = item.querySelector('.btn-select-file');
+                selectBtn.textContent = isSelected ? 'Selected' : 'Select';
+                selectBtn.classList.toggle('active', isSelected);
+            });
+
+            // Clear any existing search results
+            resultsDiv.innerHTML = '';
+            paginationContainer.innerHTML = '';
+
+            showNotification('File selected successfully', 'success');
+        } catch (error) {
+            console.error('Error selecting file:', error);
+            showNotification(error.message, 'error');
+        }
+    }
+
+    // Add selectFile to window object so it can be called from HTML
+    window.selectFile = selectFile;
+
+    // Load file list when page loads
+    loadFileList();
+
+    // Update file list after successful upload
+    async function handleFileUpload() {
         const file = fileInput.files[0];
         if (!file) {
-            alert('Please select a file first');
+            showNotification('Please select a file first', 'warning');
             return;
         }
 
         // Show progress container and reset progress
         progressContainer.style.display = 'block';
         progressBar.style.width = '0%';
-        progressText.textContent = 'Starting upload...';
+        progressText.textContent = 'Uploading file...';
         uploadButton.disabled = true;
 
         const formData = new FormData();
         formData.append('file', file);
 
         try {
-            // Start upload
             const response = await fetch('/api/upload/', {
                 method: 'POST',
                 body: formData
             });
 
-            // Check if response is JSON
-            const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
-                throw new Error('Server error: Invalid response format');
+            if (!response.ok) {
+                throw new Error('Upload failed');
             }
 
             const data = await response.json();
 
-            if (!response.ok) {
-                throw new Error(data.error || `Upload failed: ${response.status} ${response.statusText}`);
-            }
+            // Update progress UI
+            progressBar.style.width = '100%';
+            progressText.textContent = 'Upload complete!';
 
-            // Show processing progress
-            progressBar.style.width = '50%';
-            progressText.textContent = 'Processing file...';
-
-            // Poll for progress updates
-            let processingComplete = false;
-            while (!processingComplete) {
-                const progressResponse = await fetch('/api/upload-progress/');
-                const progressData = await progressResponse.json();
-                
-                if (progressData.status === 'completed') {
-                    processingComplete = true;
-                    progressBar.style.width = '100%';
-                    progressText.textContent = `Upload complete! Processed ${progressData.total_rows_processed || 0} rows.`;
-                } else if (progressData.status === 'error') {
-                    throw new Error(progressData.error || 'Error processing file');
-                } else {
-                    // Update progress bar based on processed rows
-                    const progress = progressData.total_rows_processed ? 
-                        (progressData.processed_rows / progressData.total_rows_processed * 100) : 50;
-                    progressBar.style.width = `${Math.min(90, 50 + progress/2)}%`;
-                    progressText.textContent = `Processing rows... ${progressData.processed_rows || 0} completed`;
-                }
-                
-                await new Promise(resolve => setTimeout(resolve, 1000)); // Poll every second
-            }
-
-            // Clear existing columns and add new ones
-            searchFields.innerHTML = '';
-            if (data.columns && Array.isArray(data.columns) && data.columns.length > 0) {
-                data.columns.forEach(column => {
-                    if (column && typeof column === 'string') {
-                        const checkbox = createColumnCheckbox(column);
-                        searchFields.appendChild(checkbox);
-                    }
-                });
-                selectAllCheckbox.disabled = false;
-                updateSelectAllState();
-            } else {
-                searchFields.innerHTML = '<div class="no-columns-message">No columns found in the file.</div>';
-                selectAllCheckbox.disabled = true;
-            }
-
-            // Reset file input and button
+            // Clear file input
             fileInput.value = '';
             uploadButton.disabled = false;
 
-            // Hide progress after a delay
+            // Reload file list
+            await loadFileList();
+
+            // Select the newly uploaded file
+            if (data.file_id) {
+                await selectFile(data.file_id);
+            }
+
+            showNotification('File uploaded successfully', 'success');
+
+            // Hide progress after delay
             setTimeout(() => {
                 progressContainer.style.display = 'none';
             }, 3000);
@@ -682,9 +773,45 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Upload error:', error);
             progressBar.style.width = '100%';
             progressBar.style.backgroundColor = '#dc3545';
-            progressText.textContent = error.message || 'Error uploading file. Please try again.';
+            progressText.textContent = 'Error uploading file';
             uploadButton.disabled = false;
+            showNotification('Error uploading file', 'error');
         }
+    }
+
+    // Update upload button click handler
+    uploadButton.removeEventListener('click', handleFileUpload);
+    uploadButton.addEventListener('click', handleFileUpload);
+
+    // Update search form submission to check for selected file
+    searchForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        if (!selectedFileId) {
+            showNotification('Please select a file to search', 'warning');
+            return;
+        }
+
+        const searchValue = document.getElementById('searchValue').value;
+        const selectedFields = Array.from(searchFields.querySelectorAll('input[type="checkbox"]:checked'))
+            .map(checkbox => checkbox.value);
+
+        if (selectedFields.length === 0) {
+            showNotification('Please select at least one column to search', 'warning');
+            return;
+        }
+
+        // Store current search params for pagination
+        currentSearchParams = {
+            fields: selectedFields,
+            value: searchValue
+        };
+
+        // Reset to first page
+        currentPage = 1;
+
+        // Perform search
+        await performSearch(selectedFields, searchValue, currentPage);
     });
 
     // Perform search with pagination
@@ -730,31 +857,6 @@ document.addEventListener('DOMContentLoaded', () => {
             resultsDiv.innerHTML = '<div class="error-message">Error performing search. Please try again.</div>';
         }
     }
-
-    // Search form submission
-    searchForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const searchValue = document.getElementById('searchValue').value;
-        const selectedFields = Array.from(searchFields.querySelectorAll('input[type="checkbox"]:checked'))
-            .map(checkbox => checkbox.value);
-
-        if (selectedFields.length === 0) {
-            showNotification('Please select at least one column to search', 'warning');
-            return;
-        }
-
-        // Store current search params for pagination
-        currentSearchParams = {
-            fields: selectedFields,
-            value: searchValue
-        };
-
-        // Reset to first page
-        currentPage = 1;
-
-        // Perform search
-        await performSearch(selectedFields, searchValue, currentPage);
-    });
 
     // Export results button
     document.getElementById('exportResultsBtn').addEventListener('click', () => {
