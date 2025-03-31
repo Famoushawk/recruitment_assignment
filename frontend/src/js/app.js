@@ -1,9 +1,9 @@
-import { initializeFileUpload } from './js/modules/fileUpload.js';
-import { initializeFileList } from './js/modules/fileList.js';
-import { initializeSearch } from './js/modules/search.js';
-import { initializePagination } from './js/modules/pagination.js';
-import { initializeSuggestions } from './js/modules/suggestions.js';
-import { showNotification } from './js/modules/ui.js';
+import { initializeFileUpload } from './modules/fileUpload.js';
+import { initializeFileList } from './modules/fileList.js';
+import { initializeSearch } from './modules/search.js';
+import { initializePagination } from './modules/pagination.js';
+import { initializeSuggestions } from './modules/suggestions.js';
+import { showNotification } from './modules/ui.js';
 
 // Initialize all modules when the DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
@@ -20,4 +20,4 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Global functions needed for HTML onclick handlers
-window.showNotification = showNotification;
+window.showNotification = showNotification; 
