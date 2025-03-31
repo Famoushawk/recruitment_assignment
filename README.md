@@ -1,15 +1,3 @@
-### Backend
-- Python 3.9
-- FastAPI
-- SQLAlchemy
-- PostgreSQL
-
-### Frontend
-- Vanilla JavaScript (ES6+)
-- CSS3 with CSS Variables
-- HTML5
-- Nginx (for serving static files)
-
 ## Prerequisites
 
 - Docker and Docker Compose
@@ -54,17 +42,3 @@ recruitment_assignment/
 ├── .gitignore
 └── README.md
 ```
-
-## Development
-
-### Backend Development
-- The backend uses FastAPI for the API framework
-- SQLAlchemy for database operations
-- Pydantic for data validation
-- Alembic for database migrations
-
-### Frontend Development
-- Modular JavaScript architecture
-- Component-based CSS organization
-- Vanilla JavaScript without external dependencies
-- Responsive design principles
