@@ -163,9 +163,66 @@ def get_columns(request):
 
 
 @csrf_exempt
+@require_http_methods(["GET"])
+def search_suggestions(request):
+    """Get search suggestions based on key columns"""
+    try:
+        prefix = request.GET.get('q', '').strip()
+        if not prefix or len(prefix) < 2:
+            return JsonResponse({'suggestions': []})
+
+        # Priority fields to search for suggestions
+        priority_fields = ['Product', 'IndianCompany', 'ForeignCompany', 'Indian Company', 'Foreign Company']
+
+        # Build query to find matches in priority fields
+        query = Q()
+        for field in priority_fields:
+            query |= Q(**{f"data__{field}__istartswith": prefix})
+
+        # Get distinct values that match
+        suggestions = []
+        limit = 10  # Limit number of suggestions
+
+        # Process each priority field
+        for field in priority_fields:
+            # Skip if we already have enough suggestions
+            if len(suggestions) >= limit:
+                break
+
+            # Get entries matching the prefix in this field
+            matches = DataEntry.objects.filter(**{f"data__{field}__istartswith": prefix}).distinct()
+
+            # Extract unique values for this field
+            field_values = set()
+            for entry in matches:
+                if field in entry.data and entry.data[field]:
+                    value = str(entry.data[field]).strip()
+                    if value.lower().startswith(prefix.lower()):
+                        field_values.add(value)
+
+            # Add values to suggestions (with field info)
+            for value in list(field_values)[:limit - len(suggestions)]:
+                if value not in [s['value'] for s in suggestions]:
+                    suggestions.append({
+                        'value': value,
+                        'field': field,
+                        'display': f"{value} ({field})"
+                    })
+
+            # Stop if we have enough suggestions
+            if len(suggestions) >= limit:
+                break
+
+        return JsonResponse({'suggestions': suggestions})
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@csrf_exempt
 @require_http_methods(["POST"])
 def search_data(request):
-    """Search data with pagination"""
+    """Search data with pagination and relevance sorting"""
     try:
         data = json.loads(request.body)
         fields = data.get('fields', [])
@@ -185,28 +242,93 @@ def search_data(request):
                 'total_pages': 0
             })
 
-        # Build query
-        query = Q()
+        # Identify priority fields for boosting relevance
+        priority_fields = []
+        normal_fields = []
+
+        # Priority fields mapping (case-insensitive)
+        priority_field_names = ['product', 'indiancompany', 'foreigncompany']
+
         for field in fields:
             clean_field = field.strip()
-            query |= Q(**{f"data__{clean_field}__icontains": value})
+            normalized = clean_field.lower().replace(' ', '')
+
+            if normalized in priority_field_names:
+                priority_fields.append(clean_field)
+            else:
+                normal_fields.append(clean_field)
+
+        # Build query with two parts: priority and normal
+        # This allows us to annotate and order results by relevance
+        priority_query = Q()
+        for field in priority_fields:
+            priority_query |= Q(**{f"data__{field}__icontains": value})
+
+        normal_query = Q()
+        for field in normal_fields:
+            normal_query |= Q(**{f"data__{field}__icontains": value})
+
+        # Combine queries
+        combined_query = priority_query | normal_query
 
         # Perform search
-        results = DataEntry.objects.filter(query)
+        results = DataEntry.objects.filter(combined_query)
 
-        # Get total count for pagination
-        total_count = results.count()
+        # Apply relevance ranking: prioritize matches in important fields
+        # We'll use a custom sorting approach by adding annotations
+        # For PostgreSQL, we could use more advanced features
 
-        # Apply pagination
-        paginator = Paginator(results, page_size)
-        page_obj = paginator.get_page(page)
+        # First get all matching results
+        all_results = list(results)
 
-        # Prepare response
+        # Define a function to calculate relevance score
+        def calculate_relevance(entry_data):
+            score = 0
+
+            # Check priority fields first (higher score)
+            for field in priority_fields:
+                if field in entry_data and value.lower() in str(entry_data[field]).lower():
+                    # Product gets highest priority
+                    if field.lower() == 'product':
+                        score += 100
+                    else:
+                        score += 50
+
+            # Then check other fields
+            for field in normal_fields:
+                if field in entry_data and value.lower() in str(entry_data[field]).lower():
+                    score += 10
+
+            return score
+
+        # Sort results by relevance score (higher first)
+        sorted_results = sorted(
+            all_results,
+            key=lambda entry: calculate_relevance(entry.data),
+            reverse=True
+        )
+
+        # Get total count
+        total_count = len(sorted_results)
+
+        # Manual pagination
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        paginated_results = sorted_results[start_idx:end_idx]
+        total_pages = (total_count + page_size - 1) // page_size  # Ceiling division
+
+        # Prepare response with additional relevance info
         response_data = {
-            'results': [entry.data for entry in page_obj],
+            'results': [
+                {
+                    **entry.data,
+                    '_relevance': calculate_relevance(entry.data)  # Add relevance score for debugging
+                }
+                for entry in paginated_results
+            ],
             'total_count': total_count,
             'page': page,
-            'total_pages': paginator.num_pages
+            'total_pages': total_pages
         }
 
         return JsonResponse(response_data, safe=False)

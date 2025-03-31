@@ -218,6 +218,155 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load columns initial state when page loads
     loadColumns();
 
+    // Set up search suggestions
+    const searchInput = document.getElementById('searchValue');
+    const suggestionsList = document.getElementById('suggestionsList');
+    let suggestionsTimer = null;
+    let currentSuggestions = [];
+
+    // Function to fetch search suggestions
+    async function fetchSuggestions(query) {
+        if (!query || query.length < 2) {
+            suggestionsList.innerHTML = '';
+            suggestionsList.style.display = 'none';
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/suggestions/?q=${encodeURIComponent(query)}`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch suggestions');
+            }
+
+            const data = await response.json();
+            currentSuggestions = data.suggestions;
+
+            // Display suggestions
+            if (currentSuggestions.length > 0) {
+                suggestionsList.innerHTML = '';
+
+                currentSuggestions.forEach((suggestion, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'suggestion-item';
+
+                    // Highlight the matching part
+                    const value = suggestion.value;
+                    const queryLower = query.toLowerCase();
+                    const valueLower = value.toLowerCase();
+
+                    const matchIndex = valueLower.indexOf(queryLower);
+                    let displayHTML = '';
+
+                    if (matchIndex >= 0) {
+                        displayHTML =
+                            value.substring(0, matchIndex) +
+                            '<strong>' + value.substring(matchIndex, matchIndex + query.length) + '</strong>' +
+                            value.substring(matchIndex + query.length);
+                    } else {
+                        displayHTML = value;
+                    }
+
+                    // Add field information
+                    displayHTML += ` <span class="suggestion-field">(${suggestion.field})</span>`;
+
+                    item.innerHTML = displayHTML;
+
+                    // Handle click on suggestion
+                    item.addEventListener('click', () => {
+                        searchInput.value = suggestion.value;
+                        suggestionsList.style.display = 'none';
+                        searchInput.focus();
+                    });
+
+                    suggestionsList.appendChild(item);
+                });
+
+                suggestionsList.style.display = 'block';
+            } else {
+                suggestionsList.innerHTML = '';
+                suggestionsList.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Error fetching suggestions:', error);
+            suggestionsList.innerHTML = '';
+            suggestionsList.style.display = 'none';
+        }
+    }
+
+    // Handle input changes with debounce
+    searchInput.addEventListener('input', () => {
+        const query = searchInput.value.trim();
+
+        // Clear previous timer
+        if (suggestionsTimer) {
+            clearTimeout(suggestionsTimer);
+        }
+
+        // Set new timer for debounce (300ms)
+        suggestionsTimer = setTimeout(() => {
+            fetchSuggestions(query);
+        }, 300);
+    });
+
+    // Hide suggestions when clicking outside
+    document.addEventListener('click', (e) => {
+        if (e.target !== searchInput && e.target !== suggestionsList && !suggestionsList.contains(e.target)) {
+            suggestionsList.style.display = 'none';
+        }
+    });
+
+    // Show suggestions again when focusing on input
+    searchInput.addEventListener('focus', () => {
+        if (currentSuggestions.length > 0) {
+            suggestionsList.style.display = 'block';
+        }
+    });
+
+    // Handle keyboard navigation in suggestions
+    searchInput.addEventListener('keydown', (e) => {
+        if (!suggestionsList.style.display || suggestionsList.style.display === 'none') {
+            return;
+        }
+
+        const suggestionItems = suggestionsList.querySelectorAll('.suggestion-item');
+        if (suggestionItems.length === 0) {
+            return;
+        }
+
+        // Find currently selected item
+        const currentSelected = suggestionsList.querySelector('.suggestion-item.selected');
+        let currentIndex = -1;
+
+        if (currentSelected) {
+            currentIndex = Array.from(suggestionItems).indexOf(currentSelected);
+        }
+
+        // Handle arrow keys
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (currentIndex < suggestionItems.length - 1) {
+                if (currentSelected) {
+                    currentSelected.classList.remove('selected');
+                }
+                suggestionItems[currentIndex + 1].classList.add('selected');
+            }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (currentIndex > 0) {
+                if (currentSelected) {
+                    currentSelected.classList.remove('selected');
+                }
+                suggestionItems[currentIndex - 1].classList.add('selected');
+            }
+        } else if (e.key === 'Enter' && currentSelected) {
+            e.preventDefault();
+            searchInput.value = currentSuggestions[currentIndex].value;
+            suggestionsList.style.display = 'none';
+        } else if (e.key === 'Escape') {
+            suggestionsList.style.display = 'none';
+        }
+    });
+
     // Check progress of file upload
     let progressInterval = null;
     function checkUploadProgress() {
@@ -294,19 +443,109 @@ document.addEventListener('DOMContentLoaded', () => {
         if (parsedColumns.length > 0) {
             searchFields.innerHTML = '';
 
-            // Create a list container
+            // Create a priority section for frequently used columns
+            const priorityContainer = document.createElement('div');
+            priorityContainer.className = 'priority-columns';
+            priorityContainer.innerHTML = '<h4>Frequently Searched Columns</h4>';
+
+            // Create a list container for regular columns
             const columnsList = document.createElement('div');
-            columnsList.style.display = 'flex';
-            columnsList.style.flexDirection = 'column';
-            columnsList.style.width = '100%';
+            columnsList.className = 'regular-columns';
+            columnsList.innerHTML = '<h4>Other Columns</h4>';
+
+            // Track if we found priority columns
+            let foundPriorityColumns = false;
+
+            // Common search columns (case-insensitive matching)
+            const priorityColumns = ['product', 'indiancompany', 'foreigncompany'];
+
+            // Sort columns so priority ones appear first
+            const sortedColumns = [...parsedColumns].sort((a, b) => {
+                const aIsPriority = priorityColumns.includes(a.toLowerCase().replace(/\s+/g, ''));
+                const bIsPriority = priorityColumns.includes(b.toLowerCase().replace(/\s+/g, ''));
+
+                if (aIsPriority && !bIsPriority) return -1;
+                if (!aIsPriority && bIsPriority) return 1;
+                return a.localeCompare(b);
+            });
 
             // Add each column as a checkbox
-            parsedColumns.forEach(column => {
+            sortedColumns.forEach(column => {
                 if (column && column.trim()) {
                     const checkbox = createColumnCheckbox(column);
-                    columnsList.appendChild(checkbox);
+
+                    // Check if this is a priority column (case-insensitive match)
+                    const normalizedColumn = column.toLowerCase().replace(/\s+/g, '');
+                    const isPriorityColumn = priorityColumns.includes(normalizedColumn);
+
+                    if (isPriorityColumn) {
+                        // Add to priority section and auto-check the box
+                        priorityContainer.appendChild(checkbox);
+                        // Find the checkbox input and check it
+                        const input = checkbox.querySelector('input[type="checkbox"]');
+                        if (input) {
+                            input.checked = true;
+                        }
+                        foundPriorityColumns = true;
+                    } else {
+                        // Add to regular section
+                        columnsList.appendChild(checkbox);
+                    }
                 }
             });
+
+            // Add sections to the page
+            if (foundPriorityColumns) {
+                searchFields.appendChild(priorityContainer);
+
+                // Add quick search buttons for priority columns
+                const quickSearchContainer = document.createElement('div');
+                quickSearchContainer.className = 'quick-search-buttons';
+
+                const quickSearchLabel = document.createElement('div');
+                quickSearchLabel.className = 'quick-search-label';
+                quickSearchLabel.textContent = 'Quick Search:';
+                quickSearchContainer.appendChild(quickSearchLabel);
+
+                const btnContainer = document.createElement('div');
+                btnContainer.className = 'quick-search-btn-container';
+
+                // Add buttons for each priority type
+                const quickSearchTypes = [
+                    { name: 'Product', columns: ['product'] },
+                    { name: 'Companies', columns: ['indiancompany', 'foreigncompany'] },
+                    { name: 'All', columns: priorityColumns }
+                ];
+
+                quickSearchTypes.forEach(type => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'quick-search-btn';
+                    btn.textContent = type.name;
+                    btn.addEventListener('click', () => {
+                        // Uncheck all boxes first
+                        const allCheckboxes = searchFields.querySelectorAll('input[type="checkbox"]');
+                        allCheckboxes.forEach(cb => cb.checked = false);
+
+                        // Check only the relevant columns
+                        type.columns.forEach(colName => {
+                            // Find checkboxes that match (case-insensitive)
+                            parsedColumns.forEach(colLabel => {
+                                if (colLabel.toLowerCase().replace(/\s+/g, '') === colName) {
+                                    const input = document.querySelector(`#column-${colLabel.trim().replace(/\s+/g, '-')}`);
+                                    if (input) input.checked = true;
+                                }
+                            });
+                        });
+
+                        updateSelectAllState();
+                    });
+                    btnContainer.appendChild(btn);
+                });
+
+                quickSearchContainer.appendChild(btnContainer);
+                searchFields.appendChild(quickSearchContainer);
+            }
 
             searchFields.appendChild(columnsList);
             selectAllCheckbox.disabled = false;
@@ -493,12 +732,31 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.href = `/api/download-results/?${queryParams.toString()}`;
     });
 
+    // Highlight matches in text
+    function highlightMatches(text, searchTerm) {
+        if (!text || !searchTerm || searchTerm.trim() === '') {
+            return text;
+        }
+
+        // Escape special characters in the search term for regex
+        const escapedSearchTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        // Create a regex that's case insensitive
+        const regex = new RegExp(`(${escapedSearchTerm})`, 'gi');
+
+        // Replace matches with highlighted version
+        return text.replace(regex, '<span class="highlight">$1</span>');
+    }
+
     function displayResults(data, totalCount) {
         if (!data || data.length === 0) {
             resultsDiv.innerHTML = '<div class="no-results">No results found</div>';
             paginationContainer.innerHTML = '';
             return;
         }
+
+        // Get current search term
+        const searchTerm = document.getElementById('searchValue').value;
 
         // Create a card-based layout for results
         const resultsContainer = document.createElement('div');
@@ -515,19 +773,69 @@ document.addEventListener('DOMContentLoaded', () => {
             const card = document.createElement('div');
             card.className = 'result-card';
 
+            // Add relevance indicator if available
+            if (row._relevance) {
+                card.dataset.relevance = row._relevance;
+            }
+
             // Create header with key information
             const header = document.createElement('div');
             header.className = 'result-header';
 
-            // Try to find the most important fields to show in the header
+            // Prioritize showing product and company information in the header
             const productName = row['Product'] || '';
+            const indianCompany = row['IndianCompany'] || row['Indian Company'] || '';
+            const foreignCompany = row['ForeignCompany'] || row['Foreign Company'] || '';
             const itemNo = row['Item No'] || '';
-            header.innerHTML = `
-                <h3>${productName} ${itemNo ? `<span class="item-number">Item #${itemNo}</span>` : ''}</h3>
-                <div class="result-actions">
-                    <button class="btn-expand" onclick="toggleResultDetails(${index})">Details</button>
-                </div>
+
+            // Create header with highlighted matches
+            const headerContent = document.createElement('div');
+            headerContent.className = 'header-content';
+
+            // Add product name with highlighting
+            const productTitle = document.createElement('h3');
+            productTitle.innerHTML = highlightMatches(productName, searchTerm);
+            headerContent.appendChild(productTitle);
+
+            // Add item number if available
+            if (itemNo) {
+                const itemNumberSpan = document.createElement('span');
+                itemNumberSpan.className = 'item-number';
+                itemNumberSpan.textContent = `Item #${itemNo}`;
+                productTitle.appendChild(itemNumberSpan);
+            }
+
+            // Add company information if available
+            if (indianCompany || foreignCompany) {
+                const companyInfo = document.createElement('div');
+                companyInfo.className = 'company-info';
+
+                if (indianCompany) {
+                    const indianCompanyDiv = document.createElement('div');
+                    indianCompanyDiv.className = 'company indian-company';
+                    indianCompanyDiv.innerHTML = `<span class="company-label">Indian Company:</span> ${highlightMatches(indianCompany, searchTerm)}`;
+                    companyInfo.appendChild(indianCompanyDiv);
+                }
+
+                if (foreignCompany) {
+                    const foreignCompanyDiv = document.createElement('div');
+                    foreignCompanyDiv.className = 'company foreign-company';
+                    foreignCompanyDiv.innerHTML = `<span class="company-label">Foreign Company:</span> ${highlightMatches(foreignCompany, searchTerm)}`;
+                    companyInfo.appendChild(foreignCompanyDiv);
+                }
+
+                headerContent.appendChild(companyInfo);
+            }
+
+            header.appendChild(headerContent);
+
+            // Add action buttons
+            const actionButtons = document.createElement('div');
+            actionButtons.className = 'result-actions';
+            actionButtons.innerHTML = `
+                <button class="btn-expand" onclick="toggleResultDetails(${index})">Details</button>
             `;
+            header.appendChild(actionButtons);
             card.appendChild(header);
 
             // Create the details section with all data in a clean grid layout
