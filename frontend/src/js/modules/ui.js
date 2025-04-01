@@ -37,13 +37,33 @@ export function formatNumber(num) {
 }
 
 export function highlightMatches(text, searchTerm) {
-    if (!text || !searchTerm || searchTerm.trim() === '') {
+    if (!text || !searchTerm) {
         return text;
     }
 
-    const escapedSearchTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`(${escapedSearchTerm})`, 'gi');
-    return text.replace(regex, '<span class="highlight">$1</span>');
+    // Convert text to string if it isn't already
+    text = text.toString();
+
+    // Handle array of search terms
+    if (Array.isArray(searchTerm)) {
+        return searchTerm.reduce((acc, term) => {
+            if (!term || term.trim() === '') {
+                return acc;
+            }
+            const escapedSearchTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`(${escapedSearchTerm})`, 'gi');
+            return acc.replace(regex, '<span class="highlight">$1</span>');
+        }, text);
+    }
+
+    // Handle single search term
+    if (typeof searchTerm === 'string' && searchTerm.trim() !== '') {
+        const escapedSearchTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`(${escapedSearchTerm})`, 'gi');
+        return text.replace(regex, '<span class="highlight">$1</span>');
+    }
+
+    return text;
 }
 
 export function initializeUI() {
